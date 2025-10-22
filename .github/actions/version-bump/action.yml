@@ -1,0 +1,121 @@
+name: Version Bump (Compute + Sync + Changelog + Tag)
+author: Chuseok22
+description: "main 브랜치 커밋패턴 감지 -> 버전 파일 동기화 -> CHANGELOG.md 파일 업데이트 -> 새로운 tag 및 release 생성 후 푸시"
+
+inputs:
+  # 프로젝트 타입
+  project_type:
+    description: "프로젝트 타입 설정 (spring | next | auto) - 기본: auto"
+    required: false
+    default: "auto"
+
+  # main 에서만 실행 강제
+  default_branch:
+    description: "실행할 기본 브랜치명 (예: main) - 기본 main"
+    required: false
+    default: "main"
+
+  # 버전 증가 트리거 방식: 커밋 한 줄(subject) 패턴만 허용
+  tag_prefix:
+    description: "태그 prefix (예: v) - 기본: v"
+    required: false
+    default: "v"
+
+  # 버전이 없는 경우 초기 버전 설정
+  default_version:
+    description: "초기 버전(태그/파일 모두 없을 때) - 기본: 0.0.0"
+    required: false
+    default: "0.0.0"
+
+  # Next.js 상수 파일 경로
+  next_constant_path:
+    description: "Next.js 버전 상수 경로 - 기본: src/constant/version.ts"
+    required: false
+    default: "src/constant/version.ts"
+
+  # Spring Boot application.yml 의 version 키 치환 (true/false)
+  sync_app_yaml:
+    description: "Spring application.yml 의 version 키 치환 (true/false) - 기본: false"
+    required: false
+    default: "false"
+
+  # 모노레포 하위 작업경로
+  workdir:
+    description: "하위 폴더 (예: backend/ 또는 web/). 빈 값이면 루트경로 - 기본: 루트경로"
+    required: false
+    default: ""
+
+outputs:
+  version_bumped:
+    description: "버전 증가 여부 (true/false)"
+    value: ${{ steps.compute.outputs.version_bumped }}
+
+  bump_level:
+    description: "major | minor | patch | none"
+    value: ${{ steps.compute.outputs.bump_level }}
+
+  new_version:
+    description: "증가 후 버전 (예: 1.0.3)"
+    value: ${{ steps.compute.outputs.new_version }}
+
+  new_tag:
+    description: "증가 후 태그 (예: v1.0.3)"
+    value: ${{ steps.compute.outputs.new_tag }}
+
+  project_type:
+    description: "확정된 프로젝트 타입"
+    value: ${{ steps.compute.outputs.project_type }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - id: compute
+      shell: bash
+      env:
+        INPUT_PROJECT_TYPE: ${{ inputs.project_type }}
+        INPUT_DEFAULT_BRANCH: ${{ inputs.default_branch }}
+        INPUT_TAG_PREFIX: ${{ inputs.tag_prefix }}
+        INPUT_DEFAULT_VERSION: ${{ inputs.default_version }}
+        INPUT_WORKDIR: ${{ inputs.workdir }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_ACTOR: ${{ github.actor }}
+      run: node "${{ github.action_path }}/scripts/compute-bump.mjs"
+
+    # 파일 동기화 (build.gradle / package.json / application.yml / version.ts)
+    - name: 파일 버전 동기화
+      shell: bash
+      env:
+        PROJECT_TYPE:              ${{ steps.compute.outputs.project_type }}
+        NEW_VERSION:               ${{ steps.compute.outputs.new_version }}
+        INPUT_NEXT_CONSTANTS_PATH: ${{ inputs.next_constants_path }}
+        INPUT_SYNC_APP_YAML:       ${{ inputs.sync_app_yaml }}
+        INPUT_WORKDIR:             ${{ inputs.workdir }}
+      run: node "${{ github.action_path }}/scripts/sync-files.mjs"
+
+    # CHANGELOG.md 파일 업데이트
+    - name: Update CHANGELOG
+      if: ${{ steps.compute.outputs.version_bumped == 'true' }}
+      shell: bash
+      env:
+        NEW_VERSION:               ${{ steps.compute.outputs.new_version }}
+        BUMP_LEVEL:                ${{ steps.compute.outputs.bump_level }}
+        COMMIT_SUBJECT:            ${{ steps.compute.outputs.commit_subject }}
+        COMMIT_SHA:                ${{ steps.compute.outputs.commit_sha }}
+        TZ:                        Asia/Seoul
+      run: node "${{ github.action_path }}/scripts/update-changelog.mjs"
+
+    # 태그 생성 후 푸시 + 릴리즈 커밋 푸시
+    - name: Create tag & push
+      if: ${{ steps.compute.outputs.version_bumped == 'true' }}
+      shell: bash
+      env:
+        TAG:                       ${{ steps.compute.outputs.new_tag }}
+        NEW_VERSION:               ${{ steps.compute.outputs.new_version }}
+        SKIP_TOKEN:                "[skip version]"
+        GITHUB_REF_NAME:           ${{ github.ref_name }}
+      run: node "${{ github.action_path }}/scripts/create-tag.mjs"
