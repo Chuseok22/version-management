@@ -1,28 +1,16 @@
 #!usr/bin/env node
 import fs from 'node:fs';
 
+// 입력값
 const newVersion = process.env.NEW_VERSION;
 const bumpLevel = process.env.BUMP_LEVEL;
 const commitSubject = process.env.COMMIT_SUBJECT;
 const commitSha = process.env.COMMIT_SHA ?? '';
 
+// 배너/헤더 상수
 const BANNER_AUTHOR_NAME = 'Chuseok22';
 const BANNER_AUTHOR_URL = 'https://github.com/Chuseok22'
 const BANNER_WORKFLOW_URL = 'https://github.com/Chuseok22/version-management';
-
-if (!newVersion) {
-  console.error("NEW_VERSION 은 필수로 설정되어야 합니다.");
-  process.exit(1);
-}
-
-if (!bumpLevel) {
-  console.error("Version 커밋 시 (major | minor | patch) bumpLevel 이 필수로 설정되어야합니다.");
-  process.exit(1);
-}
-
-const description = commitSubject.replace(/^\s*version\s*\(\s*(major|minor|patch)\s*\)\s*:\s*/i, '').trim();
-const date = new Date().toISOString().slice(0, 10);
-const emoji = bumpLevel === 'major' ? '🚀' : bumpLevel === 'minor' ? '✨' : '🐛';
 
 const HEADER_NEW = '# Chuseok22 Version Changelog';
 
@@ -38,44 +26,103 @@ const INTRO_BANNER = [
   '<!-- vm-banner:end -->',
 ].join('\n');
 
-let isFirstCreate = false;
-let prev = '';
-
-if (fs.existsSync('CHANGELOG.md')) {
-  prev = fs.readFileSync('CHANGELOG.md', 'utf8');
-} else {
-  isFirstCreate = true;
+// 유효성 검사
+if (!newVersion) {
+  console.error("NEW_VERSION 은 필수로 설정되어야 합니다.");
+  process.exit(1);
 }
 
-// 이전 파일에서 예전 헤더를 제거 후 본문만 추출
-let previousBody = '';
-if (prev) {
-  previousBody = prev.replace(/^#\s*(Version\s+)?Changelog\s*/i, '').trimStart();
+if (!bumpLevel) {
+  console.error("Version 커밋 시 (major | minor | patch) bumpLevel 이 필수로 설정되어야합니다.");
+  process.exit(1);
 }
 
-// 새로운 컨텐츠 조립
-const lines = [];
+if (!commitSubject) {
+  console.error("COMMIT_SUBJECT 가 비어있습니다.");
+  process.exit(1);
+}
 
-if (isFirstCreate) {
-  // 최초 생성 시 안내 베너 추가
-  lines.push(INTRO_BANNER);
+// 유틸함수
+function normalizeEol(str) {
+  return str.replace(/\r\n/g, '\n');
+}
+
+function splitByBanner(input) {
+  // 배너 블록을 찾아 분리
+  const re = /<!--\s*vm-banner-start\s*-->[\s\S]*?<!--\s*vm-banner:end\s*-->/i;
+  const m = input.match(re);
+  if (!m) return { banner: '', rest: input };
+
+  const banner = m[0];
+  const before = input.slice(0, m.index).trim();
+  const after  = input.slice(m.index + m[0].length).replace(/^\s+/, '');
+  // 배너 앞의 잡동사니는 버림, 배너 뒤부터가 rest
+  return { banner, rest: after };
+}
+
+function stripLeadingHeader(body) {
+  // 파일 상단의 H1 헤더(Changelog) 1개만 제거
+  const reHeader = /^\s*#\s*(?:Chuseok22\s+)?Version\s+Changelog\s*\n?/i;
+  return body.replace(reHeader, '').replace(/^\n+/, '');
+}
+
+function buildEntry({ version, level, subject, sha }) {
+  const emoji = level === 'major' ? '🚀' : level === 'minor' ? '✨' : '🐛';
+  const date  = new Date().toISOString().slice(0,10);
+  const description  = subject.replace(/^\s*version\s*\(\s*(major|minor|patch)\s*\)\s*:\s*/i, '').trim();
+
+  const lines = [];
+  lines.push(`## [${version}] - ${date}`);
   lines.push('');
+  lines.push(`${emoji} **${level}**: ${description}`);
+  if (sha) lines.push(`- commit: \`${sha}\``);
+  lines.push('');
+  return lines.join('\n');
 }
 
-lines.push(HEADER_NEW);
-lines.push('');
-lines.push(`## [${newVersion}] - ${date}`);
-lines.push('');
-lines.push(`${emoji} **${bumpLevel}**: ${description}`);
-if (commitSha) {
-  lines.push(`- commit: \`${commitSha}\``);
-}
-lines.push('');
-
-// 이전 본문이 있다면 이어붙이기
-if (previousBody) {
-  lines.push(prev);
+// 본문 조립 로직
+let prevRaw = '';
+let fileExists = false;
+if (fs.existsSync('CHANGELOG.md')) {
+  prevRaw = normalizeEol(fs.readFileSync('CHANGELOG.md', 'utf8'));
+  fileExists = true;
 }
 
-fs.writeFileSync('CHANGELOG.md', lines.join('\n'), 'utf8');
-console.log('CHANGELOG.md 파일 업데이트 완료')
+// 이전 파일에서 배너를 분리 & 보존
+let bannerBlock = INTRO_BANNER;
+let previousBody = '';
+
+if (fileExists && prevRaw.trim().length > 0) {
+  const { banner, rest } = splitByBanner(prevRaw);
+  if (banner) bannerBlock = normalizeEol(banner); // 기존 배너 유지
+  // 배너 뒤에 붙어 있던 헤더를 제거하고, 그 이하만 이전 이력으로 사용
+  previousBody = stripLeadingHeader(rest);
+} else {
+  // 최초 생성
+  previousBody = '';
+}
+
+// 항상 "배너 → 헤더 → 최신 엔트리 → 이전 이력" 순서로 재조립
+const parts = [];
+parts.push(bannerBlock);
+parts.push('');
+parts.push(HEADER_NEW);
+parts.push('');
+parts.push(buildEntry({
+  version: newVersion,
+  level: bumpLevel.toLowerCase(),
+  subject: commitSubject,
+  sha: commitSha,
+}));
+
+// 이전 이력이 있으면 이어붙임 (배너/헤더는 제거된 상태의 본문만)
+if (previousBody && previousBody.trim().length > 0) {
+  // 두 개의 빈 줄로 구분(가독성)
+  if (!previousBody.startsWith('\n')) parts.push('');
+  parts.push(previousBody.replace(/^\n+/, ''));
+}
+
+const output = parts.join('\n').replace(/\n{3,}/g, '\n\n'); // 과도한 빈 줄 정리
+fs.writeFileSync('CHANGELOG.md', output.endsWith('\n') ? output : output + '\n', 'utf8');
+
+console.log('CHANGELOG.md 파일 업데이트 완료');
