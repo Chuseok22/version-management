@@ -32,11 +32,11 @@ on:
         default: "0.0.0"
 
       # Next.js 상수 파일 경로
-      next_constant_path:
-        description: "Next.js 버전 상수 경로 - 기본: src/constant/version.ts"
+      next_constants_path:
+        description: "Next.js 버전 상수 경로 - 기본: src/constants/version.ts"
         required: false
         type: string
-        default: "src/constant/version.ts"
+        default: "src/constants/version.ts"
 
       # Spring Boot application.yml 의 version 키 치환 (true/false)
       sync_app_yaml:
