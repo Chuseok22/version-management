@@ -106,7 +106,7 @@ const { entry, description } = buildEntry({
 });
 
 // 다음 스텝(create-tag)에서 재사용하도록 출력
-setOutput('release-description', description);
+setOutput('release_description', description);
 
 // 항상 "배너 → 헤더 → 최신 엔트리 → 이전 이력" 순서로 재조립
 const parts = [];
