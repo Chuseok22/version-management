@@ -11,12 +11,18 @@
 ## 🚀 Features
 
 - **Framework support**
-    - **Spring Boot (Gradle Groovy)**: updates `version = 'X.Y.Z'` in `build.gradle`, optionally updates `version:` key in `src/main/resources/application.yml`
-    - **Next.js (TypeScript)**: updates `package.json.version` and creates/updates `src/constants/version.ts` (path customizable)
+    - **Spring Boot (Gradle Groovy)**
+        - Updates `version = 'X.Y.Z'` in `build.gradle`
+        - Optionally updates `version:` key in `src/main/resources/application.yml`
+    - **Next.js (TypeScript)**
+        - Updates `package.json.version`
+        - Creates/updates `src/constants/version.ts` (path customizable)
+
 - **Commit-driven bump**
     - `version(major): ...`
     - `version(minor): ...`
     - `version(patch): ...`
+
 - **Policy guarantees**
     - **Bump only on the default branch (`main`)**
     - Detect current version by **Tag → Files → Default seed**
@@ -24,6 +30,7 @@
     - Create & push **Git Tag** (`vX.Y.Z`) + push **release commit**
     - Always include **`[skip version]`** in the release commit message (prevents re-run loops)
     - **No bump → still succeeds** (lets other workflows branch based on the outcome)
+
 - **Follow-up workflows**
     - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped**
     - Example: `apk-build.yml` listens with `on: repository_dispatch: types: [ version-bumped ]`
@@ -57,7 +64,7 @@ version-management/
 
 ### 1) Use the central reusable workflow (recommended)
 
-**Consumer repo**: `.github/workflows/chuseok22-version-management.yml`
+Consumer repo: `.github/workflows/chuseok22-version-management.yml`
 
 ```yaml
 name: Version Management (from chuseok22/version-management)
@@ -94,7 +101,7 @@ Call the **composite action** directly inside a job:
 
 ```yaml
 jobs:
-  some-job:
+  only-bump:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,7 +109,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
 
-      - name: Chuseok22 Version bump only (no orchestration)
+      - name: Version bump (logic only)
         uses: chuseok22/version-management/.github/actions/version-bump@v1
         with:
           project_type: auto
@@ -125,10 +132,12 @@ Version is determined **by the commit subject**:
 - `version(patch): message` → `PATCH` +1
 - Any other commit → **no bump** (workflow still succeeds)
 
-> Examples:  
-> `version(major): drop legacy auth endpoints`  
-> `version(minor): add CSV export`  
-> `version(patch): fix NPE when user is null`
+Examples:
+```
+version(major): drop legacy auth endpoints
+version(minor): add CSV export
+version(patch): fix NPE when user is null
+```
 
 ---
 
@@ -156,7 +165,7 @@ The **composite action** `.github/actions/version-bump/action.yml` accepts the s
 
 Trigger a build only when a bump actually happened:
 
-**Consumer repo**: `.github/workflows/apk-build.yml`
+Consumer repo: `.github/workflows/apk-build.yml`
 ```yaml
 name: APK Build (only after version bump)
 
@@ -190,7 +199,7 @@ jobs:
 - On each release, **prepend** a new version section to the top.
 - On first creation, a **banner** is added at the very top:
   ```
-  <!-- vm-banner:start -->
+  <!-- vm-banner-start -->
   🔧 **Version Management Auto Changelog**
 
   This file is generated & maintained by the central Version Management workflow.
