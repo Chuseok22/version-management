@@ -71,7 +71,7 @@ permissions:
   actions: read
 
 jobs:
-  versioning:
+  chuseok22-version-bump:
     uses: chuseok22/version-management/.github/workflows/auto-version.yml@v1
     with:
       project_type: "auto"                 # spring | next | auto
@@ -101,7 +101,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
 
-      - name: Version bump only (no orchestration)
+      - name: Chuseok22 Version bump only (no orchestration)
         uses: chuseok22/version-management/.github/actions/version-bump@v1
         with:
           project_type: auto
