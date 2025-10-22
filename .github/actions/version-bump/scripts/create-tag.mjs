@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { runCmd } from "./sync-files.mjs";
 
 const tag = process.env.TAG;
 const newVersion = process.env.NEW_VERSION;
@@ -10,6 +9,10 @@ const refName = process.env.GITHUB_REF_NAME ?? 'main';
 if (!tag || !newVersion) {
   console.error('TAG 와 NEW_VERSION은 필수로 설정되어야합니다.');
   process.exit(1);
+}
+
+function runCmd(cmd) {
+  execSync(cmd, { stdio: 'inherit' });
 }
 
 function out(cmd, opts = {}) {

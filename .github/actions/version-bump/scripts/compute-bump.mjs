@@ -43,7 +43,7 @@ const workdir = inputs.workdir ? path.join(repoRoot, inputs.workdir) : repoRoot;
 
 // main 브랜치 강제
 if (inputs.refName && inputs.refName !== inputs.defaultBranch) {
-  console.log(`[skip] default branch가 아닙니다: ${inputs.refName} (required: ${inputs.defaultBranch}`);
+  console.log(`[skip] default branch가 아닙니다: ${inputs.refName} (required: ${inputs.defaultBranch})`);
   out('version_bumped', 'false');
   out('bump_level', 'none');
   process.exit(0);
