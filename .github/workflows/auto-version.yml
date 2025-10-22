@@ -95,10 +95,10 @@ jobs:
     name: Version Bump (central)
     runs-on: ubuntu-latest
     outputs:
-      version_bumped: ${{ steps.compute.outputs.version_bumped }} # 버전 증가 여부 (true/false)
-      bump_level: ${{ steps.compute.outputs.bump_level }}
-      new_version: ${{ steps.compute.outputs.new_version }}
-      new_tag: ${{ steps.compute.outputs.new_tag }}
+      version_bumped: ${{ steps.bump.outputs.version_bumped }} # 버전 증가 여부 (true/false)
+      bump_level: ${{ steps.bump.outputs.bump_level }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+      new_tag: ${{ steps.bump.outputs.new_tag }}
 
     steps:
       - name: 코드 체크아웃
@@ -106,59 +106,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # 내부 action.yml 호출
+      - id: bump
+        uses: ./.github/actions/version-bump
         with:
-          node-version: 20
-
-      # 커밋 검사 + 버전 계산 (main & 패턴 감지)
-      - id: compute
-        shell: bash
-        env:
-          INPUT_PROJECT_TYPE: ${{ inputs.project_type }}
-          INPUT_DEFAULT_BRANCH: ${{ inputs.default_branch }}
-          INPUT_TAG_PREFIX: ${{ inputs.tag_prefix }}
-          INPUT_DEFAULT_VERSION: ${{ inputs.default_version }}
-          INPUT_WORKDIR: ${{ inputs.workdir }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          GITHUB_ACTOR: ${{ github.actor }}
-        run: node "${{ github.action_path }}/../actions/version-bump/scripts/compute-bump.mjs"
-
-      # 버전 증가가 없으면(일반 커밋) - 성공 종료
-      - name: 📝 버전 증가 없음(일반 커밋) - 성공 종료
-        if: ${{ steps.compute.outputs.version_bumped != 'true'}}
-        run: |
-          echo "일반 커밋입니다. 버전 변경 없음. (성공 종료)
-          exit 0
-
-      # 파일 동기화 (build.gradle / package.json / application.yml / version.ts)
-      - name: 파일 버전 동기화
-        shell: bash
-        env:
-          PROJECT_TYPE: ${{ steps.compute.outputs.project_type }}
-          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          INPUT_NEXT_CONSTANTS_PATH: ${{ inputs.next_constant_path }}
-          INPUT_SYNC_APP_YAML: ${{ inputs.sync_app_yaml }}
-          INPUT_WORKDIR: ${{ inputs.workdir }}
-        run: node "${{ github.action_path }}/../actions/version-bump/scripts/sync-files.mjs"
-
-      # CHANGELOG.md 파일 업데이트
-      - name: CHANGELOG.md 파일 업데이트
-        shell: bash
-        env:
-          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          BUMP_LEVEL: ${{ steps.compute.outputs.bump_level }}
-          COMMIT_SUBJECT: ${{ steps.compute.outputs.commit_subject }}
-          COMMIT_SHA: ${{ steps.compute.outputs.commit_sha }}
-          TZ: Asia/Seoul
-        run: node "${{ github.action_path }}/../actions/version-bump/scripts/update-changelog.mjs"
-
-      # 태그 생성 후 푸시 + 릴리즈 커밋 푸시
-      - name: 새로운 태그 & 릴리즈 생성
-        shell: bash
-        env:
-          TAG: ${{ steps.compute.outputs.new_tag }}
-          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          SKIP_TOKEN: "[skip version]"
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: node "${{ github.action_path }}/../actions/version-bump/scripts/create-tag.mjs"
+          project_type:        ${{ inputs.project_type }}
+          default_branch:      ${{ inputs.default_branch }}
+          tag_prefix:          ${{ inputs.tag_prefix }}
+          default_version:     ${{ inputs.default_version }}
+          next_constants_path: ${{ inputs.next_constants_path }}
+          sync_app_yaml:       ${{ inputs.sync_app_yaml }}
+          workdir:             ${{ inputs.workdir }}
