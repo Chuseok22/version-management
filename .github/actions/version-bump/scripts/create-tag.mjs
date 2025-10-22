@@ -1,36 +1,17 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
+import { buildReleaseMessage, execOut, extractVersionDescription, hasChanges, runCmd, tryExecOut } from "./utils.mjs";
 
 const tag = process.env.TAG;
 const newVersion = process.env.NEW_VERSION;
 const skipToken = process.env.SKIP_TOKEN ?? '[skip version]';
 const refName = process.env.GITHUB_REF_NAME ?? 'main';
+const releaseDescription = process.env.RELEASE_DESCRIPTION ?? '';
+const commitSubjectEnv = process.env.COMMIT_SUBJECT ?? '';
 
 if (!tag || !newVersion) {
   console.error('TAG 와 NEW_VERSION은 필수로 설정되어야합니다.');
   process.exit(1);
-}
-
-function runCmd(cmd) {
-  execSync(cmd, { stdio: 'inherit' });
-}
-
-function out(cmd, opts = {}) {
-  return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', ...opts }).trim();
-}
-
-function tryOut(cmd) {
-  try {
-    return out(cmd);
-  } catch {
-    return '';
-  }
-}
-
-function hasChanges(paths = []) {
-  const sel = paths.length ? ` -- ${paths.map(p => `"${p}"`).join(' ')}` : '';
-  const s = tryOut(`git status --porcelain${sel}`);
-  return !!s;
 }
 
 // Git identity
@@ -42,12 +23,20 @@ try {
 }
 
 // ===== 현재 상태 파악 =====
-let lastMsg = tryOut('git log -1 --pretty=%B');
-const tagExists = !!tryOut(`git tag -l "${tag}"`).split('\n').find(t => t === tag);
+let lastMsg = tryExecOut('git log -1 --pretty=%B');
+const tagExists = !!tryExecOut(`git tag -l "${tag}"`).split('\n').find(t => t === tag);
 const isReleaseCommit = /chore\(release\): v\d+\.\d+\.\d+/.test(lastMsg);
 
 // CHANGELOG가 방금 수정되어 staged/unstaged 상태인지 확인
 const changelogTouched = hasChanges(['CHANGELOG.md']);
+
+function computeDescription() {
+  let description = (releaseDescription || '').trim();
+  if (!description && commitSubjectEnv) {
+    description = extractVersionDescription(commitSubjectEnv);
+  }
+  return buildReleaseMessage(newVersion, description, skipToken);
+}
 
 // 이미 태그가 있으면, 기존 릴리즈 커밋은 건드리지 않고 CHANGELOG 변경만 별도 커밋
 if (tagExists) {
@@ -63,9 +52,11 @@ if (tagExists) {
     runCmd('git add CHANGELOG.md');
   }
 
+  const descriptionMsg = computeDescription();
+
   if (!isReleaseCommit) {
     // 릴리즈 커밋이 없다면 새로 생성
-    const msg = `chore(release): v${newVersion} ${skipToken}`;
+    const msg = `chore(release): v${newVersion} ${descriptionMsg} ${skipToken}`;
     runCmd(`git commit -m "${msg.replace(/"/g, '\\"')}"`);
     lastMsg = msg;
   } else {
@@ -83,7 +74,7 @@ if (tagExists) {
 
 // 태그 생성/푸시 (이미 존재하면 스킵)
 try {
-  const exists = execSync(`git tag -l "${tag}"`, { encoding: 'utf8' }).trim();
+  const exists = execOut(`git tag -l "${tag}"`);
   if (!exists.split('\n').includes(tag)) {
     runCmd(`git tag -a "${tag}" -m "${tag}"`);
   } else {

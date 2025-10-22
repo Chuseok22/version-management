@@ -123,4 +123,6 @@ runs:
         NEW_VERSION:               ${{ steps.compute.outputs.new_version }}
         SKIP_TOKEN:                "[skip version]"
         GITHUB_REF_NAME:           ${{ github.ref_name }}
+        RELEASE_DESCRIPTION:       ${{ steps.compute.outputs.release_description }}
+        COMMIT_SUBJECT:            ${{ steps.compute.outputs.commit_subject }}
       run: node "${{ github.action_path }}/scripts/create-tag.mjs"

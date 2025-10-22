@@ -1,32 +1,13 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { detectProjectType, parseSemverXyz, setOutput, tryExecOut } from "./utils.mjs";
 
 /**
  * projectType 자동 판별 (Next.js / Spring Boot)
  * 커밋 subject 검증: version(major|minor|patch): {message}
  * 태그/파일/기본값 기반으로 버전 계산 후 bump
  */
-
-function out(k, v) {
-  if (!process.env.GITHUB_OUTPUT) {
-    return;
-  }
-  appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`, 'utf8');
-}
-
-function sh(cmd) {
-  return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' }).trim();
-}
-
-function trySh(cmd) {
-  try {
-    return sh(cmd);
-  } catch {
-    return '';
-  }
-}
 
 const inputs = {
   projectType: process.env.INPUT_PROJECT_TYPE ?? 'auto',
@@ -44,59 +25,42 @@ const workdir = inputs.workdir ? path.join(repoRoot, inputs.workdir) : repoRoot;
 // main 브랜치 강제
 if (inputs.refName && inputs.refName !== inputs.defaultBranch) {
   console.log(`[skip] default branch가 아닙니다: ${inputs.refName} (required: ${inputs.defaultBranch})`);
-  out('version_bumped', 'false');
-  out('bump_level', 'none');
+  setOutput('version_bumped', 'false');
+  setOutput('bump_level', 'none');
   process.exit(0);
 }
 
 // 커밋 메시지 확인
-const commitSubject = trySh('git log -1 --format=%s');
-const commitSha = trySh('git rev-parse --short HEAD');
-out('commit_subject', commitSubject);
-out('commit_sha', commitSha);
+const commitSubject = tryExecOut('git log -1 --format=%s');
+const commitSha = tryExecOut('git rev-parse --short HEAD');
+setOutput('commit_subject', commitSubject);
+setOutput('commit_sha', commitSha);
 
 const m = commitSubject.match(/^\s*version\s*\(\s*(major|minor|patch)\s*\)\s*:\s*(.+)\s*$/i);
 if (!m) {
   console.log("[skip] 커밋 형태가 'version(major | minor | patch): {commit-message}' 패턴이 아닙니다.")
-  out('version_bumped', 'false');
-  out('bump_level', 'none');
+  setOutput('version_bumped', 'false');
+  setOutput('bump_level', 'none');
   process.exit(0);
 }
 const bumpLevel = m[1].toLowerCase();
-out('bump_level', bumpLevel);
+setOutput('bump_level', bumpLevel);
 
 // 프로젝트 타입 자동 판별
-let projectType = inputs.projectType;
-if (projectType === 'auto') { // projectType이 'auto'로 입력된 경우
-  if (existsSync(path.join(workdir, 'package.json'))) {
-    projectType = 'next';
-  } else if (existsSync(path.join(workdir, 'build.gradle'))) {
-    projectType = 'spring';
-  } else {
-    console.error('프로젝트 타입을 결정할 수 없습니다. (package.json 또는 build.gradle 찾을 수 없음)');
-    process.exit(1);
-  }
-}
-
-out('project_type', projectType);
+let projectType = detectProjectType(workdir, inputs.projectType);
+setOutput('project_type', projectType);
 
 // 현재 버전 소스: 태그 우선 -> 파일 -> default_version
-const lastTag = trySh(`git describe --tags --abbrev=0 --match "${inputs.tagPrefix}[0-9]*.[0-9]*.[0-9]*"`);
-let currentMajor = 0, currentMinor = 0, currentPatch = 0;
+const tagPattern = `${inputs.tagPrefix}[0-9]*.[0-9]*.[0-9]*`;
+const lastTag = tryExecOut(`git describe --tags --abbrev=0 --match "${tagPattern}"`);
 
-function parseXYZ(version) {
-  const mm = (version || '').match(/^(\d+)\.(\d+)\.(\d+)$/);
-  if (!mm) {
-    return null;
-  }
-  return [Number(mm[1]), Number(mm[2]), Number(mm[3])];
-}
+let [currentMajor, currentMinor, currentPatch] = [0, 0, 0];
 
 if (lastTag) {
-  const rawVersion = lastTag.replace(new RegExp(`^${inputs.tagPrefix}`), '');
-  const parseVersion = parseXYZ(rawVersion);
-  if (parseVersion) {
-    [currentMajor, currentMinor, currentPatch] = parseVersion;
+  const raw = lastTag.replace(new RegExp(`^${inputs.tagPrefix}`), '');
+  const parsed = parseSemverXyz(raw);
+  if (parsed) {
+    [currentMajor, currentMinor, currentPatch] = parsed;
   }
 } else {
   // 파일에서 시도
@@ -104,7 +68,7 @@ if (lastTag) {
     const packageJsonPath = path.join(workdir, 'package.json');
     if (existsSync(packageJsonPath)) {
       const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-      const parseVersion = parseXYZ(packageJson.version || '');
+      const parseVersion = parseSemverXyz(packageJson.version || '');
       if (parseVersion) {
         [currentMajor, currentMinor, currentPatch] = parseVersion;
       }
@@ -118,7 +82,7 @@ if (lastTag) {
       const mmAssign = txt.match(/^\s*version\s*=\s*['"](\d+\.\d+\.\d+)(?:-[^'"]+)?['"]/m);
       const mmMethod = txt.match(/^\s*version\s+['"](\d+\.\d+\.\d+)(?:-[^'"]+)?['"]/m);
       const found = (mmAssign?.[1] || mmMethod?.[1]) ?? '';
-      const parsed = parseXYZ(found);
+      const parsed = parseSemverXyz(found);
 
       if (parsed) {
         [currentMajor, currentMinor, currentPatch] = parsed;
@@ -126,7 +90,7 @@ if (lastTag) {
     }
   }
   if (currentMajor === 0 && currentMinor === 0 && currentPatch === 0) {
-    const parseVersion = parseXYZ(inputs.defaultVersion);
+    const parseVersion = parseSemverXyz(inputs.defaultVersion);
     if (parseVersion) {
       [currentMajor, currentMinor, currentPatch] = parseVersion;
     }
@@ -148,8 +112,8 @@ if (bumpLevel === 'major') {
 const newVersion = `${currentMajor}.${currentMinor}.${currentPatch}`;
 const newTag = `${inputs.tagPrefix}${newVersion}`;
 
-out('version_bumped', 'true');
-out('new_version', newVersion);
-out('new_tag', newTag);
+setOutput('version_bumped', 'true');
+setOutput('new_version', newVersion);
+setOutput('new_tag', newTag);
 
 console.log(`✅ 버전 증가 요청=${bumpLevel}, 새로운 버전=${newVersion}, 태그=${newTag}, 프로젝트 타입=${projectType}`);
