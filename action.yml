@@ -104,6 +104,7 @@ runs:
 
     # CHANGELOG.md 파일 업데이트
     - name: Update CHANGELOG
+      id: changelog
       if: ${{ steps.compute.outputs.version_bumped == 'true' }}
       shell: bash
       env:
@@ -123,6 +124,6 @@ runs:
         NEW_VERSION:               ${{ steps.compute.outputs.new_version }}
         SKIP_TOKEN:                "[skip version]"
         GITHUB_REF_NAME:           ${{ github.ref_name }}
-        RELEASE_DESCRIPTION:       ${{ steps.compute.outputs.release_description }}
+        RELEASE_DESCRIPTION:       ${{ steps.changelog.outputs.release_description }}
         COMMIT_SUBJECT:            ${{ steps.compute.outputs.commit_subject }}
       run: node "${{ github.action_path }}/scripts/create-tag.mjs"

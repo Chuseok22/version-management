@@ -1,8 +1,8 @@
 # version-management
 
 > **Centralized, reusable GitHub Actions workflow for automated versioning (Spring Boot & Next.js)**  
-> On pushes to the default branch (`main`) with a versioning commit message, this workflow performs **Version bump → Project file sync → CHANGELOG update → Git Tag creation/push** in a standardized way.  
-> It also emits a `repository_dispatch` event **only when a version bump actually happens**, so you can trigger follow-up workflows (e.g., `apk-build.yml`) conditionally.
+> On pushes to the default branch (`main`) with a compliant commit message, this project performs **Version bump → Project file sync → CHANGELOG update → Git Tag creation/push** in a standardized way.  
+> It also emits a `repository_dispatch` event **only when a version bump actually happens**, so you can trigger follow‑up workflows (e.g., `apk-build.yml`) conditionally.
 
 > **한국어 문서** → [README.md](README.md)
 
@@ -10,68 +10,57 @@
 
 ## 🚀 Features
 
-- **Framework support**
-    - **Spring Boot (Gradle Groovy)**
-        - Updates `version = 'X.Y.Z'` in `build.gradle`
-        - Optionally updates `version:` key in `src/main/resources/application.yml`
-    - **Next.js (TypeScript)**
-        - Updates `package.json.version`
-        - Creates/updates `src/constants/version.ts` (path customizable)
-
-- **Commit-driven bump**
+- **Two frameworks supported**
+    - **Spring Boot (Gradle/Groovy)**: updates `version` in `build.gradle`, optionally replaces the `version:` key in `src/main/resources/application.yml`
+    - **Next.js (TypeScript)**: updates `package.json.version` and creates/updates `src/constants/version.ts` (path is configurable)
+- **Commit‑driven versioning**
     - `version(major): ...`
     - `version(minor): ...`
     - `version(patch): ...`
-
 - **Policy guarantees**
-    - **Bump only on the default branch (`main`)**
-    - Detect current version by **Tag → Files → Default seed**
-    - **Prepend** a new section to `CHANGELOG.md` (adds a top banner on first creation)
-    - Create & push **Git Tag** (`vX.Y.Z`) + push **release commit**
-    - Always include **`[skip version]`** in the release commit message (prevents re-run loops)
-    - **No bump → still succeeds** (lets other workflows branch based on the outcome)
-
-- **Follow-up workflows**
-    - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped**
-    - Example: `apk-build.yml` listens with `on: repository_dispatch: types: [ version-bumped ]`
+    - Bump **only on the default branch (`main`)**
+    - Detect current version in order: **Tag → Files → Default value**
+    - `CHANGELOG.md` is **prepended at the top** (insert banner only once; subsequent entries accumulate **under** the banner)
+    - Create & push **Git Tag** (`vX.Y.Z`) + push **release commit**  
+      Release commit message: `chore(release): vX.Y.Z {original subject description} [skip version]`
+    - **No bump → workflow still succeeds** (handy for pipeline branching)
+- **Follow‑up workflow integration**
+    - Sends `repository_dispatch` only when the version actually bumped (default event: `version-bumped`)
+    - Payload: `new_version`, `new_tag`, `bump_level`, `sha`
 
 ---
 
-## 📦 Repository Layout
+## 📦 Repository layout
 
 ```
 version-management/
-├─ .github/
-│  ├─ workflows/
-│  │  └─ auto-version.yml                 # Reusable workflow (workflow_call)
-│  └─ actions/
-│     └─ version-bump/
-│        ├─ action.yml                    # Composite action (logic bundle)
-│        └─ scripts/
-│           ├─ compute-bump.mjs           # Commit check + version calculation
-│           ├─ sync-files.mjs             # File sync + commit
-│           ├─ update-changelog.mjs       # CHANGELOG prepend (+ initial banner)
-│           └─ create-tag.mjs             # Tag create/push + release commit amend
-└─ README.md
+├─ action.yml                        # Composite action entry (can be used directly)
+├─ scripts/
+│  ├─ compute-bump.mjs               # Commit inspection + version calculation
+│  ├─ sync-files.mjs                 # File sync + commit
+│  ├─ update-changelog.mjs           # CHANGELOG prepend (+ initial banner)
+│  └─ create-tag.mjs                 # Tag create/push + release commit handling
+└─ .github/
+   └─ workflows/
+      └─ auto-version.yml            # Reusable workflow (workflow_call) orchestrator
 ```
-
-> Why split them?  
-> The **reusable workflow** orchestrates pipeline concerns (permissions, concurrency, branch/trigger guards, follow-up dispatch), while the **composite action** packages the actual logic (bump, file updates, changelog, tagging) for reuse anywhere.
+> **Why split it like this?**  
+> The **reusable workflow** handles pipeline orchestration (permissions, concurrency, dispatch), while the **composite action** bundles the actual logic (bump/file updates/changelog/tagging) so it can be reused anywhere.
 
 ---
 
-## 🧭 Quick Start (Consumer repo)
+## 🧭 Quick start (consumer repo)
 
-### 1) Use the central reusable workflow (recommended)
+### 1) Use the **reusable workflow** (recommended)
 
-Consumer repo: `.github/workflows/chuseok22-version-management.yml`
+**Consumer repo**: `.github/workflows/version-management.yml`
 
 ```yaml
 name: Version Management (from chuseok22/version-management)
 
 on:
   push:
-    branches: [ main ]    # default branch
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -86,22 +75,20 @@ jobs:
       default_branch: "main"
       tag_prefix: "v"
       default_version: "0.0.0"
-      next_constants_path: "src/constants/version.ts"  # for Next.js
+      next_constants_path: "src/constants/version.ts"  # for Next.js only
       sync_app_yaml: "false"               # Spring application.yml version update
-      workdir: ""                          # subdir in monorepo, e.g., "backend"/"web"
+      workdir: ""                          # subdir in a monorepo, e.g., "backend"/"web"
       dispatch_on_bump: "true"             # trigger follow-ups only when bumped
       dispatch_event_type: "version-bumped"
 ```
 
-> Pin the central repo by tag: `@v1`. Upgrade to newer tags when needed.
+### 2) (Advanced) Use only the logic in an existing CI
 
-### 2) (Advanced) Use only the logic inside your existing CI
-
-Call the **composite action** directly inside a job:
+Call the **composite action** directly inside your job:
 
 ```yaml
 jobs:
-  only-bump:
+  some-job:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,8 +96,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
 
-      - name: Version bump (logic only)
-        uses: chuseok22/version-management/.github/actions/version-bump@v1
+      - name: Version bump only
+        uses: chuseok22/version-management@v1
         with:
           project_type: auto
           default_branch: main
@@ -123,25 +110,25 @@ jobs:
 
 ---
 
-## ✍️ Commit Convention (Required)
+## ✍️ Commit convention (required)
 
 Version is determined **by the commit subject**:
 
-- `version(major): message` → `MAJOR` +1 (MINOR & PATCH = 0)
-- `version(minor): message` → `MINOR` +1 (PATCH = 0)
-- `version(patch): message` → `PATCH` +1
+- `version(major): message` → increase **MAJOR** (+1), reset MINOR/PATCH to 0
+- `version(minor): message` → increase **MINOR** (+1), reset PATCH to 0
+- `version(patch): message` → increase **PATCH** (+1)
 - Any other commit → **no bump** (workflow still succeeds)
 
 Examples:
 ```
-version(major): drop legacy auth endpoints
+version(major): drop legacy API
 version(minor): add CSV export
-version(patch): fix NPE when user is null
+version(patch): fix null check
 ```
 
 ---
 
-## ⚙️ Inputs (Overview)
+## ⚙️ Inputs (overview)
 
 **Reusable workflow** `.github/workflows/auto-version.yml` (`on: workflow_call`)
 
@@ -150,102 +137,44 @@ version(patch): fix NPE when user is null
 | `project_type` | `auto` | `spring` \| `next` \| `auto` (auto-detect: `package.json` → next, `build.gradle` → spring) |
 | `default_branch` | `main` | Only bump on this branch |
 | `tag_prefix` | `v` | Tag prefix (e.g., `v1.2.3`) |
-| `default_version` | `0.0.0` | Seed when no tag/file exists |
+| `default_version` | `0.0.0` | Seed version when no tag/file exists |
 | `next_constants_path` | `src/constants/version.ts` | Next.js constant file path |
 | `sync_app_yaml` | `false` | Update `version:` in Spring `src/main/resources/application.yml` if present |
-| `workdir` | `""` | Subdirectory in monorepo (e.g., `backend`, `web`) |
-| `dispatch_on_bump` | `true` | Send `repository_dispatch` only when bumped |
-| `dispatch_event_type` | `version-bumped` | Event type consumed by follow-up workflows |
+| `workdir` | `""` | Subdirectory in a monorepo (e.g., `backend`, `web`) |
+| `dispatch_on_bump` | `true` | Send `repository_dispatch` only when a bump occurred |
+| `dispatch_event_type` | `version-bumped` | Event type for follow-up workflows |
 
-The **composite action** `.github/actions/version-bump/action.yml` accepts the same/similar inputs.
+> The **composite action** (`action.yml`) accepts the same/similar inputs.
 
 ---
 
-## 🔗 Follow-up Workflow (apk-build) Example
+## 🧩 CHANGELOG policy
 
-Trigger a build only when a bump actually happened:
+- On each release, **prepend** a new version section to the very top.
+- On first creation, insert the **banner once** (future entries are added **below** the banner).
+- The release commit message **always includes `[skip version]`** to prevent re-run loops.
 
-Consumer repo: `.github/workflows/apk-build.yml`
-```yaml
-name: APK Build (only after version bump)
+Banner example:
+```
+<!-- vm-banner:start -->
+🔧 **Version Management Auto Change History**
 
-on:
-  repository_dispatch:
-    types: [ version-bumped ]
+This file is automatically generated and maintained by the centralized workflow (**Version Management**).
+Author: **Chuseok22** · https://github.com/Chuseok22
+Workflow repo: https://github.com/Chuseok22/version-management
 
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Show payload
-        run: |
-          echo "new_version: ${{ github.event.client_payload.new_version }}"
-          echo "new_tag:     ${{ github.event.client_payload.new_tag }}"
-          echo "bump_level:  ${{ github.event.client_payload.bump_level }}"
-          echo "sha:         ${{ github.event.client_payload.sha }}"
-      - uses: actions/checkout@v4
-      # build/sign/upload artifacts...
+※ Manual edits may be overwritten in future releases.
+<!-- vm-banner:end -->
 ```
 
-> For non-version commits, the central workflow exits successfully **without dispatch**, so this workflow **won’t run**.
+---
+
+## 🔒 Requirements & permissions
+
+- Runner: `ubuntu-latest`, Node: `20`
+- Permissions: `contents: write`
+- Checkout: `actions/checkout@v4` with `fetch-depth: 0` (tags/history required)
 
 ---
 
-## 🧩 CHANGELOG.md Policy
-
-- On each release, **prepend** a new version section to the top.
-- On first creation, a **banner** is added at the very top:
-  ```
-  <!-- vm-banner-start -->
-  🔧 **Version Management Auto Changelog**
-
-  This file is generated & maintained by the central Version Management workflow.
-  Author: **Chuseok22** · https://github.com/Chuseok22
-  Workflow repo: https://github.com/Chuseok22/version-management
-
-  ※ Manual edits may be overwritten in future releases.
-  <!-- vm-banner:end -->
-  ```
-- The release commit message **always includes `[skip version]`** to avoid re-run loops.
-
----
-
-## 🔒 Permissions & Tokens
-
-- Declare `permissions: contents: write` in the workflow.
-- For tagging/pushing **within the same repo**, the default **`GITHUB_TOKEN`** is sufficient.  
-  (A PAT is only needed if you dispatch to **another repo**.)
-- `actions/checkout@v4` sets up credentials by default; use `fetch-depth: 0` to read tags & history.
-
----
-
-## 🧪 Checklist
-
-- [ ] Default branch is `main`
-- [ ] Commit **subject** follows the convention (`version(major|min|patch): ...`)
-- [ ] Reasonable `default_version` when no tag exists
-- [ ] Spring: `build.gradle` present / Next: `package.json` present
-- [ ] Next constant path (`next_constants_path`) is correct (e.g., `src/constants/version.ts`)
-- [ ] `workdir` set for monorepos
-- [ ] On first `CHANGELOG.md`, banner appears once
-- [ ] Release commit message contains `[skip version]`
-
----
-
-## 🤝 Contributing
-
-Issues and PRs are welcome.  
-Ideas for improvements (Spring multi-module propagation, GitHub Release generation, banner customization inputs, etc.) are appreciated.
-
----
-
-## 📄 License
-
-MIT
-
----
-
-**Author: [Chuseok22](https://github.com/Chuseok22)** · Workflow repo: <https://github.com/Chuseok22/version-management>
+**Author: [Chuseok22](https://github.com/Chuseok22)** · Repo: https://github.com/Chuseok22/version-management
