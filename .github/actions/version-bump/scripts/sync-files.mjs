@@ -79,15 +79,17 @@ if (projectType === 'spring') {
       const regExpYml = /(^|\n)\s*version\s*:\s*["']?\d+\.\d+\.\d+["']?/m;
       if (regExpYml.test(yml)) {
         yml = yml.replace(regExpYml, (m, p1) => `${p1}version: ${newVersion}`);
-        fs.writeFileSync(app, yml, 'utf8');
-        gitCommit(`chore(release): v${newVersion}`, app);
+      } else { // version 키가 없을 때 추가
+        yml += `\nversion: ${newVersion}\n`;
       }
+      fs.writeFileSync(app, yml, 'utf8');
+      gitCommit(`chore(release): v${newVersion}`, app);
     }
   }
 } else if (projectType === 'next') {
   const packageJson = path.join(workdir, 'package.json');
   if (!fs.existsSync(packageJson)) {
-    console.error(`package-json 파일을 찾을 수 없습니다. 경로: ${packageJson}`);
+    console.error(`package.json 파일을 찾을 수 없습니다. 경로: ${packageJson}`);
     process.exit(1);
   }
   const data = JSON.parse(fs.readFileSync(packageJson, 'utf8'));

@@ -30,10 +30,10 @@ function trySh(cmd) {
 
 const inputs = {
   projectType: process.env.INPUT_PROJECT_TYPE ?? 'auto',
-  defaultBranch: process.env.DEFAULT_BRANCH ?? 'main',
-  tagPrefix: process.env.TAG_PREFIX ?? 'v',
-  defaultVersion: process.env.DEFAULT_VERSION ?? '0.0.0',
-  workdir: process.env.WORKDIR ?? '',
+  defaultBranch: process.env.INPUT_DEFAULT_BRANCH ?? 'main',
+  tagPrefix: process.env.INPUT_TAG_PREFIX ?? 'v',
+  defaultVersion: process.env.INPUT_DEFAULT_VERSION ?? '0.0.0',
+  workdir: process.env.INPUT_WORKDIR ?? '',
   refName: process.env.GITHUB_REF_NAME ?? '',
   actor: process.env.GITHUB_ACTOR ?? '',
 };
@@ -43,7 +43,7 @@ const workdir = inputs.workdir ? path.join(repoRoot, inputs.workdir) : repoRoot;
 
 // main 브랜치 강제
 if (inputs.refName && inputs.refName !== inputs.defaultBranch) {
-  console.log(`[skip] default branch가 아닙니다: ${inputs.refName} (required: ${inputs.defaultVersion}`);
+  console.log(`[skip] default branch가 아닙니다: ${inputs.refName} (required: ${inputs.defaultBranch}`);
   out('version_bumped', 'false');
   out('bump_level', 'none');
   process.exit(0);
@@ -68,12 +68,12 @@ out('bump_level', bumpLevel);
 // 프로젝트 타입 자동 판별
 let projectType = inputs.projectType;
 if (projectType === 'auto') { // projectType이 'auto'로 입력된 경우
-  if (existsSync(path.join(workdir, 'package-json'))) {
+  if (existsSync(path.join(workdir, 'package.json'))) {
     projectType = 'next';
   } else if (existsSync(path.join(workdir, 'build.gradle'))) {
     projectType = 'spring';
   } else {
-    console.error('프로젝트 타입을 결정할 수 없습니다. (package.json 또는 build.gradle 찾을 수 없음');
+    console.error('프로젝트 타입을 결정할 수 없습니다. (package.json 또는 build.gradle 찾을 수 없음)');
     process.exit(1);
   }
 }
@@ -81,12 +81,11 @@ if (projectType === 'auto') { // projectType이 'auto'로 입력된 경우
 out('project_type', projectType);
 
 // 현재 버전 소스: 태그 우선 -> 파일 -> default_version
-const matchPattern = `${inputs.tagPrefix}[0-9]*`;
-let lastTag = trySh(`git describe --tags --abbrev=0 --match "${matchPattern}`);
+const lastTag = trySh(`git describe --tags --abbrev=0 --match "${inputs.tagPrefix}[0-9]*.[0-9]*.[0-9]*"`);
 let currentMajor = 0, currentMinor = 0, currentPatch = 0;
 
 function parseXYZ(version) {
-  const mm = (v || '').match(/^(\d+)\.(\d+)\.(\d+)$/);
+  const mm = (version || '').match(/^(\d+)\.(\d+)\.(\d+)$/);
   if (!mm) {
     return null;
   }
@@ -111,7 +110,7 @@ if (lastTag) {
       }
     }
   } else if (projectType === 'spring') {
-    const gradlePath = path.json(workdir, 'build.gradle');
+    const gradlePath = path.join(workdir, 'build.gradle');
     if (existsSync(gradlePath)) {
       const txt = readFileSync(gradlePath, 'utf8');
       const mm = txt.match(/^\s*version\s*=\s*['"](\d+\.\d+\.\d+)['"]/m);
@@ -143,7 +142,7 @@ if (bumpLevel === 'major') {
   currentPatch += 1;
 }
 
-const newVersion = `${curMajor}.${curMinor}.${curPatch}`;
+const newVersion = `${currentMajor}.${currentMinor}.${currentPatch}`;
 const newTag = `${inputs.tagPrefix}${newVersion}`;
 
 out('version_bumped', 'true');
