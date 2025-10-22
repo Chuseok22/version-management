@@ -1,0 +1,164 @@
+name: Version Management
+
+on:
+  workflow_call:
+    inputs:
+      # 프로젝트 타입
+      project_type:
+        description: "프로젝트 타입 설정 (spring | next | auto) - 기본: auto"
+        required: false
+        type: string
+        default: "auto"
+
+      # main 에서만 실행 강제
+      default_branch:
+        description: "실행할 기본 브랜치명 (예: main) - 기본 main"
+        required: false
+        type: string
+        default: "main"
+
+      # 버전 증가 트리거 방식: 커밋 한 줄(subject) 패턴만 허용
+      tag_prefix:
+        description: "태그 prefix (예: v) - 기본: v"
+        required: false
+        type: string
+        default: "v"
+
+      # 버전이 없는 경우 초기 버전 설정
+      default_version:
+        description: "초기 버전(태그/파일 모두 없을 때) - 기본: 0.0.0"
+        required: false
+        type: string
+        default: "0.0.0"
+
+      # Next.js 상수 파일 경로
+      next_constant_path:
+        description: "Next.js 버전 상수 경로 - 기본: src/constant/version.ts"
+        required: false
+        type: string
+        default: "src/constant/version.ts"
+
+      # Spring Boot application.yml 의 version 키 치환 (true/false)
+      sync_app_yaml:
+        description: "Spring application.yml 의 version 키 치환 (true/false) - 기본: false"
+        required: false
+        type: string
+        default: "false"
+
+      # 모노레포 하위 작업경로
+      workdir:
+        description: "하위 폴더 (예: backend/ 또는 web/). 빈 값이면 루트경로 - 기본: 루트경로"
+        required: false
+        type: string
+        default: ""
+
+      # 후속 워크플로우 트리거
+      dispatch_on_bump:
+        description: "버전 증가 시 repository_dispatch 이벤트 전송 여부 - 기본: true"
+        required: false
+        type: string
+        default: "true"
+
+      dispatch_event_type:
+        description: "repository_dispatch 이벤트 타입 - 기본: version-bumped"
+        required: false
+        type: string
+        default: "version-bumped"
+
+    outputs:
+      version_bumped:
+        description: "버전 증가 여부 (true/false)"
+        value: ${{ jobs.version.outputs.version_bumped }}
+
+      bump_level:
+        description: "major | minor | patch | none"
+        value: ${{ jobs.version.outputs.bump_level }}
+
+      new_version:
+        description: "증가 후 버전 (예: 1.0.3)"
+        value: ${{ jobs.version.outputs.new_version }}
+
+      new_tag:
+        description: "증가 후 태그 (예: v1.0.3)"
+        value: ${{ jobs.version.outputs.new_tag }}
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: version-management-${{ github.repository }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    name: Version Bump (central)
+    runs-on: ubuntu-latest
+    outputs:
+      version_bumped: ${{ steps.compute.outputs.version_bumped }} # 버전 증가 여부 (true/false)
+      bump_level: ${{ steps.compute.outputs.bump_level }}
+      new_version: ${{ steps.compute.outputs.new_version }}
+      new_tag: ${{ steps.compute.outputs.new_tag }}
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 커밋 검사 + 버전 계산 (main & 패턴 감지)
+      - id: compute
+        shell: bash
+        env:
+          INPUT_PROJECT_TYPE: ${{ inputs.project_type }}
+          INPUT_DEFAULT_BRANCH: ${{ inputs.default_branch }}
+          INPUT_TAG_PREFIX: ${{ inputs.tag_prefix }}
+          INPUT_DEFAULT_VERSION: ${{ inputs.default_version }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: node "${{ github.action_path }}/../actions/version-bump/scripts/compute-bump.mjs"
+
+      # 버전 증가가 없으면(일반 커밋) - 성공 종료
+      - name: 📝 버전 증가 없음(일반 커밋) - 성공 종료
+        if: ${{ steps.compute.outputs.version_bumped != 'true'}}
+        run: |
+          echo "일반 커밋입니다. 버전 변경 없음. (성공 종료)
+          exit 0
+
+      # 파일 동기화 (build.gradle / package.json / application.yml / version.ts)
+      - name: 파일 버전 동기화
+        shell: bash
+        env:
+          PROJECT_TYPE: ${{ steps.compute.outputs.project_type }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          INPUT_NEXT_CONSTANTS_PATH: ${{ inputs.next_constant_path }}
+          INPUT_SYNC_APP_YAML: ${{ inputs.sync_app_yaml }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+        run: node "${{ github.action_path }}/../actions/version-bump/scripts/sync-files.mjs"
+
+      # CHANGELOG.md 파일 업데이트
+      - name: CHANGELOG.md 파일 업데이트
+        shell: bash
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          BUMP_LEVEL: ${{ steps.compute.outputs.bump_level }}
+          COMMIT_SUBJECT: ${{ steps.compute.outputs.commit_subject }}
+          COMMIT_SHA: ${{ steps.compute.outputs.commit_sha }}
+          TZ: Asia/Seoul
+        run: node "${{ github.action_path }}/../actions/version-bump/scripts/update-changelog.mjs"
+
+      # 태그 생성 후 푸시 + 릴리즈 커밋 푸시
+      - name: 새로운 태그 & 릴리즈 생성
+        shell: bash
+        env:
+          TAG: ${{ steps.compute.outputs.new_tag }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          SKIP_TOKEN: "[skip version]"
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: node "${{ github.action_path }}/../actions/version-bump/scripts/create-tag.mjs"
