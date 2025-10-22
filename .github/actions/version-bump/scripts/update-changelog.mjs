@@ -1,4 +1,4 @@
-#!usr/bin/env node
+#!/usr/bin/env node
 import fs from 'node:fs';
 import { normalizeEol, setOutput } from "./utils.mjs";
 
@@ -76,7 +76,7 @@ function buildEntry({ version, level, subject, sha }) {
   lines.push(`${emoji} **${level}**: ${description}`);
   if (sha) lines.push(`- commit: \`${sha}\``);
   lines.push('');
-  return lines.join('\n');
+  return { entry: lines.join('\n'), description };
 }
 
 // 본문 조립 로직
