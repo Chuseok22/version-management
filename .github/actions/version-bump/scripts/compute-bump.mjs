@@ -113,12 +113,15 @@ if (lastTag) {
     const gradlePath = path.join(workdir, 'build.gradle');
     if (existsSync(gradlePath)) {
       const txt = readFileSync(gradlePath, 'utf8');
-      const mm = txt.match(/^\s*version\s*=\s*['"](\d+\.\d+\.\d+)['"]/m);
-      if (mm) {
-        const parseVersion = parseXYZ(mm[1]);
-        if (parseVersion) {
-          [currentMajor, currentMinor, currentPatch] = parseVersion;
-        }
+
+      // version = '1.0.2[-...]' & version '1.0.2[-...]' 스타일 모두 허용 (접미사 허용)
+      const mmAssign = txt.match(/^\s*version\s*=\s*['"](\d+\.\d+\.\d+)(?:-[^'"]+)?['"]/m);
+      const mmMethod = txt.match(/^\s*version\s+['"](\d+\.\d+\.\d+)(?:-[^'"]+)?['"]/m);
+      const found = (mmAssign?.[1] || mmMethod?.[1]) ?? '';
+      const parsed = parseXYZ(found);
+
+      if (parsed) {
+        [currentMajor, currentMinor, currentPatch] = parsed;
       }
     }
   }
