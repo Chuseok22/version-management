@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
 import { buildReleaseMessage, execOut, extractVersionDescription, hasChanges, runCmd, tryExecOut } from "./utils.mjs";
 
 const tag = process.env.TAG;
@@ -30,11 +29,8 @@ const isReleaseCommit = /chore\(release\): v\d+\.\d+\.\d+/.test(lastMsg);
 // CHANGELOG가 방금 수정되어 staged/unstaged 상태인지 확인
 const changelogTouched = hasChanges(['CHANGELOG.md']);
 
-function computeDescription() {
-  let description = (releaseDescription || '').trim();
-  if (!description && commitSubjectEnv) {
-    description = extractVersionDescription(commitSubjectEnv);
-  }
+function computeReleaseCommitMessage() {
+  const description = (releaseDescription || extractVersionDescription(commitSubjectEnv) || '').trim();
   return buildReleaseMessage(newVersion, description, skipToken);
 }
 
@@ -52,21 +48,19 @@ if (tagExists) {
     runCmd('git add CHANGELOG.md');
   }
 
-  const descriptionMsg = computeDescription();
+  const releaseCommitMessage = computeReleaseCommitMessage();
 
   if (!isReleaseCommit) {
     // 릴리즈 커밋이 없다면 새로 생성
-    const msg = `chore(release): v${newVersion} ${descriptionMsg} ${skipToken}`;
-    runCmd(`git commit -m "${msg.replace(/"/g, '\\"')}"`);
-    lastMsg = msg;
+    runCmd(`git commit -m "${releaseCommitMessage}"`);
+    lastMsg = releaseCommitMessage;
   } else {
-    // 릴리즈 커밋이 있는데 skipToken 이 없다면 skipToken 추가
-    if (!lastMsg.includes(skipToken)) {
-      const amended = `${lastMsg} ${skipToken}`.trim();
-      runCmd(`git commit --amend -m "${amended.replace(/"/g, '\\"')}"`);
-      lastMsg = amended;
+    // 릴리즈 커밋이 있지만 메시지가 표준형과 다르면 정규화
+    if (lastMsg.trim() !== releaseCommitMessage) {
+      runCmd(`git commit --amend -m "${releaseCommitMessage}"`);
+      lastMsg = releaseCommitMessage;
     } else if (changelogTouched) {
-      // skipToken이 존재하고, 변경만 포함하고 싶으면 --amend --no-edit
+      // 메시지는 동일, 변경 파일만 포함
       runCmd('git commit --amend --no-edit');
     }
   }
