@@ -106,9 +106,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 내부 action.yml 호출
+      # action.yml 호출
       - id: bump
-        uses: ./.github/actions/version-bump
+        uses: chuseok22/version-management/.github/actions/version-bump@v1
         with:
           project_type:        ${{ inputs.project_type }}
           default_branch:      ${{ inputs.default_branch }}
