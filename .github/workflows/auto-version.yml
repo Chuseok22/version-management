@@ -72,6 +72,27 @@ on:
         type: string
         default: "VERSION"
 
+      # 릴리즈 생성 여부
+      create_release:
+        description: "버전 증가 시 GitHub Release 생성 여부 - 기본: true"
+        required: false
+        type: string
+        default: "true"
+
+      # 릴리즈 태그 latest 마킹 여부
+      release_latest:
+        description: "생성한 릴리즈를 latest로 마킹할지 여부 - 기본: true"
+        required: false
+        type: string
+        default: "true"
+
+      # pre-release 여부
+      release_prelease:
+        default: "생성한 릴리즈를 pre-release로 표시할지 여부 - 기본: false"
+        required: false
+        type: string
+        description: "false"
+
     outputs:
       version_bumped:
         description: "버전 증가 여부 (true/false)"
@@ -126,6 +147,32 @@ jobs:
           sync_app_yaml:       ${{ inputs.sync_app_yaml }}
           workdir:             ${{ inputs.workdir }}
           plain_version_file: ${{ inputs.plain_version_file }}
+
+      # GitHub Release 생성 (자동 생성 릴리즈 노트)
+      - name: GitHub Release 생성 (릴리즈 노트 자동생성)
+        if: ${{ steps.bump.outputs.version_bumped == 'true' && inputs.create_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.bump.outputs.new_tag }}
+        run: |
+          set -euo pipefail
+          echo "Target tag: $TAG"
+
+          # 플래그 구성
+          FLAGS=""
+          if [ "${{ inputs.release_latest }}" = "true" ]; then
+            FLAGS="$FLAGS --latest"
+          fi
+          if [ "${{ inputs.release_prerelease }}" = "true" ]; then
+            FLAGS="$FLAGS --prerelease"
+          fi
+
+          # 중복 방지: 릴리스가 이미 있으면 스킵
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Skip creating."
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG" $FLAGS
+          fi
 
       # 버전 bump 시 repository_dispatch 전송
       - name: Send repository_dispatch (only when bumped)
