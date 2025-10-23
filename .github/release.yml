@@ -1,0 +1,26 @@
+# .github/release.yml
+changelog:
+  categories:
+    - title: "🚀 Features"
+      labels:
+        - feat
+        - feature
+        - enhancement
+    - title: "🐛 Fixes"
+      labels:
+        - fix
+        - bug
+        - hotfix
+    - title: "🧰 Maintenance"
+      labels:
+        - chore
+        - refactor
+        - perf
+        - ci
+        - docs
+        - deps
+  exclude:
+    labels:
+      - skip-release
+    authors:
+      - dependabot[bot]
