@@ -7,7 +7,8 @@ import {
   updateGradleVersionFile,
   updateNextConstFile,
   updatePackageJsonVersion,
-  updatePackageLockVersion
+  updatePackageLockVersion,
+  updatePlainVersion
 } from "./utils.mjs";
 
 const projectType = process.env.PROJECT_TYPE ?? 'auto';
@@ -15,6 +16,7 @@ const newVersion = process.env.NEW_VERSION;
 const nextJsConstantsPath = process.env.INPUT_NEXT_CONSTANTS_PATH ?? 'src/constants/version.ts';
 const syncAppYaml = (process.env.INPUT_SYNC_APP_YAML ?? 'false').toLowerCase() === 'true';
 const inputWorkdir = process.env.INPUT_WORKDIR ?? '';
+const plainVersionFile = process.env.INPUT_PLAIN_VERSION_FILE ?? 'VERSION';
 
 if (!newVersion) {
   console.error("NEW_VERSION 은 필수 값입니다.");
@@ -77,6 +79,17 @@ if (projectType === 'spring') {
     }
     runCmd(`git add "${constPath}"`);
     runCmd(`git commit -m "chore(release): v${newVersion}"`);
+  } catch {
+    /* 변경 없음 */
+  }
+} else if (projectType === 'plain') {
+  const versionFilePath = path.join(workdir, plainVersionFile);
+  const touched = updatePlainVersion(versionFilePath, newVersion);
+  try {
+    if (touched) {
+      runCmd(`git add "${versionFilePath}"`);
+      runCmd(`git commit -m "chore(release): v${newVersion}"`);
+    }
   } catch {
     /* 변경 없음 */
   }

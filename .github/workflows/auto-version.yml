@@ -65,6 +65,13 @@ on:
         type: string
         default: "version-bumped"
 
+      # 일반 프로젝트 버전 파일 경로
+      plain_version_file:
+        description: "일반 프로젝트 버전 관리 파일 경로 - 기본: VERSION"
+        required: false
+        type: string
+        default: "VERSION"
+
     outputs:
       version_bumped:
         description: "버전 증가 여부 (true/false)"
@@ -99,6 +106,7 @@ jobs:
       bump_level: ${{ steps.bump.outputs.bump_level }}
       new_version: ${{ steps.bump.outputs.new_version }}
       new_tag: ${{ steps.bump.outputs.new_tag }}
+      plain_version_file: ${{ inputs.plain_version_file }}
 
     steps:
       - name: 코드 체크아웃
@@ -117,6 +125,7 @@ jobs:
           next_constants_path: ${{ inputs.next_constants_path }}
           sync_app_yaml:       ${{ inputs.sync_app_yaml }}
           workdir:             ${{ inputs.workdir }}
+          plain_version_file: ${{ inputs.plain_version_file }}
 
       # 버전 bump 시 repository_dispatch 전송
       - name: Send repository_dispatch (only when bumped)

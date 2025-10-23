@@ -14,7 +14,11 @@ export function execOut(cmd, opts = {}) {
 }
 
 export function tryExecOut(cmd, opts = {}) {
-  try { return execOut(cmd, opts); } catch { return ''; }
+  try {
+    return execOut(cmd, opts);
+  } catch {
+    return '';
+  }
 }
 
 export function hasChanges(paths = []) {
@@ -25,7 +29,9 @@ export function hasChanges(paths = []) {
 
 // ===== GitHub Actions output helper =====
 export function setOutput(key, value) {
-  if (!process.env.GITHUB_OUTPUT) return;
+  if (!process.env.GITHUB_OUTPUT) {
+    return;
+  }
   const line = String(value ?? '').replace(/\r?\n/g, ' ').trim();
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${line}\n`, 'utf8');
 }
@@ -43,26 +49,36 @@ export function ensureDir(dirPath) {
 // ===== Version helpers =====
 export function parseSemverXyz(version) {
   const m = (version || '').match(/^(\d+)\.(\d+)\.(\d+)$/);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
 export function extractVersionDescription(subject) {
-  if (!subject) return '';
+  if (!subject) {
+    return '';
+  }
   const m = subject.match(/^\s*version\s*\(\s*(major|minor|patch)\s*\)\s*:\s*(.+)\s*$/i);
   return m ? m[2].trim() : '';
 }
 
 // ===== Project detection =====
 export function detectProjectType(workdir, hint = 'auto') {
-  if (hint !== 'auto') return hint;
+  if (hint !== 'auto') {
+    return hint;
+  }
   const pkg = path.join(workdir, 'package.json');
   const gradle = path.join(workdir, 'build.gradle');
-  if (fs.existsSync(pkg)) return 'next';
-  if (fs.existsSync(gradle)) return 'spring';
-  throw new Error('프로젝트 타입을 결정할 수 없습니다. (package.json 또는 build.gradle 없음)');
+  if (fs.existsSync(pkg)) {
+    return 'next';
+  }
+  if (fs.existsSync(gradle)) {
+    return 'spring';
+  }
+  console.log("package.json 또는 build.gradle 을 찾을 수 없습니다. 일반 프로젝트로 설정합니다.");
+  return 'plain';
 }
-
 
 // ===== Gradle version helpers =====
 
@@ -87,7 +103,9 @@ export function replaceGradleVersionInText(txt, newVersion) {
 }
 
 export function updateGradleVersionFile(filePath, newVersion) {
-  if (!fs.existsSync(filePath)) throw new Error(`build.gradle 파일을 찾을 수 없습니다: ${filePath}`);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`build.gradle 파일을 찾을 수 없습니다: ${filePath}`);
+  }
   const txt = fs.readFileSync(filePath, 'utf8');
   const updated = replaceGradleVersionInText(txt, newVersion);
   fs.writeFileSync(filePath, updated, 'utf8');
@@ -95,7 +113,9 @@ export function updateGradleVersionFile(filePath, newVersion) {
 
 // ===== Spring application.yml version =====
 export function updateApplicationYamlVersion(filePath, newVersion) {
-  if (!fs.existsSync(filePath)) return false;
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
   let yml = fs.readFileSync(filePath, 'utf8');
   const re = /(^|\n)\s*version\s*:\s*["']?\d+\.\d+\.\d+["']?/m;
   if (re.test(yml)) {
@@ -109,17 +129,23 @@ export function updateApplicationYamlVersion(filePath, newVersion) {
 
 // ===== Node package versions =====
 export function updatePackageJsonVersion(filePath, newVersion) {
-  if (!fs.existsSync(filePath)) throw new Error(`package.json 없음: ${filePath}`);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`package.json 없음: ${filePath}`);
+  }
   const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   data.version = newVersion;
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
 }
 
 export function updatePackageLockVersion(filePath, newVersion) {
-  if (!fs.existsSync(filePath)) return false;
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
   try {
     const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    if (raw.version) raw.version = newVersion;
+    if (raw.version) {
+      raw.version = newVersion;
+    }
     if (raw.packages && raw.packages[''] && raw.packages[''].version) {
       raw.packages[''].version = newVersion;
     }
@@ -142,6 +168,14 @@ export function updateNextConstFile(filePath, newVersion) {
     }
   }
   fs.writeFileSync(filePath, content, 'utf8');
+}
+
+export function updatePlainVersion(filePath, newVersion) {
+  ensureDir(path.dirname(filePath));
+  const prev = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').trim() : '';
+  const changed = prev !== newVersion;
+  fs.writeFileSync(filePath, `${newVersion}\n`, 'utf8'); // 없으면 생성, 있으면 치환
+  return changed;
 }
 
 // ===== Release commit message =====
