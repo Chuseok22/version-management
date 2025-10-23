@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { detectProjectType, parseSemverXyz, setOutput, tryExecOut } from "./utils.mjs";
+import { detectProjectType, ensureDir, parseSemverXyz, setOutput, tryExecOut } from "./utils.mjs";
 
 /**
- * projectType 자동 판별 (Next.js / Spring Boot)
+ * projectType 자동 판별 (Next.js / Spring Boot / Plain)
  * 커밋 subject 검증: version(major|minor|patch): {message}
  * 태그/파일/기본값 기반으로 버전 계산 후 bump
  */
@@ -15,6 +15,7 @@ const inputs = {
   tagPrefix: process.env.INPUT_TAG_PREFIX ?? 'v',
   defaultVersion: process.env.INPUT_DEFAULT_VERSION ?? '0.0.0',
   workdir: process.env.INPUT_WORKDIR ?? '',
+  plainVersionFile: process.env.INPUT_PLAIN_VERSION_FILE ?? 'VERSION',
   refName: process.env.GITHUB_REF_NAME ?? '',
   actor: process.env.GITHUB_ACTOR ?? '',
 };
@@ -51,7 +52,7 @@ let projectType = detectProjectType(workdir, inputs.projectType);
 setOutput('project_type', projectType);
 
 // 현재 버전 소스: 태그 우선 -> 파일 -> default_version
-const tagPattern = `${inputs.tagPrefix}[0-9]*.[0-9]*.[0-9]*`;
+const tagPattern = `${inputs.tagPrefix}[0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*`;
 const lastTag = tryExecOut(`git describe --tags --abbrev=0 --match "${tagPattern}"`);
 
 let [currentMajor, currentMinor, currentPatch] = [0, 0, 0];
@@ -86,6 +87,18 @@ if (lastTag) {
 
       if (parsed) {
         [currentMajor, currentMinor, currentPatch] = parsed;
+      }
+    }
+  } else if (projectType === 'plain') {
+    const versionFilePath = path.join(workdir, inputs.plainVersionFile);
+    if (existsSync(versionFilePath)) {
+      const raw = readFileSync(versionFilePath, 'utf8').trim();
+      const mm = raw.match(/(\d+\.\d+\.\d+)/);
+      if (mm) {
+        const parsed = parseSemverXyz(mm[1]);
+        if (parsed) {
+          [currentMajor, currentMinor, currentPatch] = parsed;
+        }
       }
     }
   }
