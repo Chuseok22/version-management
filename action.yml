@@ -8,7 +8,7 @@ branding:
 inputs:
   # 프로젝트 타입
   project_type:
-    description: "프로젝트 타입 설정 (spring | next | auto) - 기본: auto"
+    description: "프로젝트 타입 설정 (spring | next | plain | auto) - 기본: auto"
     required: false
     default: "auto"
 
@@ -48,6 +48,12 @@ inputs:
     required: false
     default: ""
 
+  # 일반 프로젝트 버전 파일 경로
+  plain_version_file:
+    description: "일반 프로젝트 버전 관리 파일 경로 - 기본: VERSION"
+    required: false
+    default: "VERSION"
+
 outputs:
   version_bumped:
     description: "버전 증가 여부 (true/false)"
@@ -86,6 +92,7 @@ runs:
         INPUT_TAG_PREFIX: ${{ inputs.tag_prefix }}
         INPUT_DEFAULT_VERSION: ${{ inputs.default_version }}
         INPUT_WORKDIR: ${{ inputs.workdir }}
+        INPUT_PLAIN_VERSION_FILE: ${{ inputs.plain_version_file }}
         GITHUB_REF_NAME: ${{ github.ref_name }}
         GITHUB_ACTOR: ${{ github.actor }}
       run: node "${{ github.action_path }}/scripts/compute-bump.mjs"
@@ -100,6 +107,7 @@ runs:
         INPUT_NEXT_CONSTANTS_PATH: ${{ inputs.next_constants_path }}
         INPUT_SYNC_APP_YAML:       ${{ inputs.sync_app_yaml }}
         INPUT_WORKDIR:             ${{ inputs.workdir }}
+        INPUT_PLAIN_VERSION_FILE: ${{ inputs.plain_version_file }}
       run: node "${{ github.action_path }}/scripts/sync-files.mjs"
 
     # CHANGELOG.md 파일 업데이트
