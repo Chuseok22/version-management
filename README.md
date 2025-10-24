@@ -1,7 +1,7 @@
 # version-management
 
-> **GitHub Actions 기반 중앙 배포형 “자동 버전 관리” (Spring Boot · Next.js · Plain 지원)**  
-> 기본 브랜치(`main`)에서 규칙에 맞는 커밋이 푸시되면 **버전 증가 → 프로젝트 파일 동기화 → CHANGELOG 갱신 → Git Tag 생성/푸시**를 표준화된 방식으로 수행합니다.  
+> **GitHub Actions 기반 중앙 배포형 “자동 버전 관리 + 릴리스 생성” (Spring Boot · Next.js · Plain 지원)**  
+> 기본 브랜치(`main`)에서 규칙에 맞는 커밋이 푸시되면 **버전 증가 → 프로젝트 파일 동기화 → CHANGELOG 갱신 → Git Tag 생성/푸시 → GitHub Release 생성(자동 노트)**를 표준화된 방식으로 수행합니다.  
 > 또한 **버전이 실제로 증가했을 때만** `repository_dispatch` 이벤트를 보내 후속 워크플로우(예: `apk-build.yml`)를 조건부로 트리거합니다.
 
 > **English version** → [README.en.md](README.en.md)
@@ -17,8 +17,7 @@
       `package.json.version` 갱신 + `src/constants/version.ts`(경로 커스터마이즈 가능) 생성/치환 + `package-lock.json` 반영
     - **Plain (일반 프로젝트)**  
       루트(또는 지정 경로)의 **버전 파일(`VERSION`)** 을 **생성/치환**하여 새 버전 **한 줄만** 유지  
-      · 파일이 없으면 생성 → `X.Y.Z
-` 작성  
+      · 파일이 없으면 생성 → `X.Y.Z` 작성  
       · 파일이 있으면 **완전 덮어쓰기** → 최종적으로 `X.Y.Z` **한 줄만** 남김
 - **커밋 메시지로 버전 제어**
     - `version(major): ...`
@@ -32,9 +31,10 @@
     - **Git Tag**(`vX.Y.Z`) 생성·푸시 + **릴리즈 커밋** 푸시  
       릴리즈 커밋 메시지: `chore(release): vX.Y.Z {원본 커밋 설명} [skip version]`
     - **버전 증가가 없으면 성공(Success)으로 종료** (파이프라인 분기에 활용)
-- **후속 워크플로우 연동**
-    - 버전 증가시에만 `repository_dispatch`(기본 `version-bumped`) 이벤트 송신
-    - Payload: `new_version`, `new_tag`, `bump_level`, `sha`
+- **릴리스 & 후속 워크플로우 연동**
+    - 버전 증가 시 **GitHub Release 자동 생성**(자동 릴리스 노트)
+    - 버전 증가시에만 `repository_dispatch`(기본 `version-bumped`) 이벤트 송신  
+      Payload: `new_version`, `new_tag`, `bump_level`, `sha`
 
 ---
 
@@ -53,7 +53,7 @@ version-management/
       └─ auto-version.yml            # 재사용(Workflow Call) 오케스트레이터
 ```
 > **왜 분리했나요?**  
-> **재사용 워크플로**는 권한/동시성/디스패치 등 파이프라인 **오케스트레이션**을 담당하고,  
+> **재사용 워크플로**는 권한/동시성/디스패치/릴리스 생성 등 파이프라인 **오케스트레이션**을 담당하고,  
 > **컴포지트 액션**은 실제 **로직(버전계산/파일수정/체인지로그/태깅)** 을 패키징해서 어디서든 재사용할 수 있게 합니다.
 
 ---
@@ -90,6 +90,11 @@ jobs:
       dispatch_on_bump: "true"             # 버전 증가시에만 후속 트리거
       dispatch_event_type: "version-bumped"
       plain_version_file: "VERSION"        # Plain 프로젝트일 때 버전 파일 경로
+
+      # 릴리스 옵션 (워크플로 설정에 따라 사용)
+      create_release: "true"               # 버전 증가 시 릴리스 생성
+      release_latest: "true"               # 최신 릴리스로 표시
+      release_prerelease: "false"          # 프리릴리스로 표시(예: M1, RC)
 ```
 
 ### 2) (고급) 기존 CI에서 **로직만** 사용
@@ -145,7 +150,7 @@ version(patch): fix null check
 
 | 입력 | 기본값 | 설명 |
 |---|---|---|
-| `project_type` | `auto` | `spring` \| `next` \| `plain` \| `auto`(자동 탐지: `package.json` → next, `build.gradle` → spring, 그 외 → plain) |
+| `project_type` | `auto` | `spring` \| `next` \| `plain` \| `auto`(자동 탐지: `package.json` → next, `build.gradle` → spring, 그 외 → `plain`) |
 | `default_branch` | `main` | 이 브랜치에서만 버전 증가 처리 |
 | `tag_prefix` | `v` | 태그 접두어 (예: `v1.2.3`) |
 | `default_version` | `0.0.0` | 최초 태그/파일 모두 없을 때 시드 버전 |
@@ -155,6 +160,9 @@ version(patch): fix null check
 | `dispatch_on_bump` | `true` | 버전 증가시에만 `repository_dispatch` 송신 |
 | `dispatch_event_type` | `version-bumped` | 후속 워크플로에서 수신할 이벤트 타입 |
 | `plain_version_file` | `VERSION` | **Plain** 프로젝트의 버전 파일 경로(없으면 생성, 있으면 내용 전체를 새 버전 한 줄로 치환) |
+| `create_release` | `true` | 버전 증가 시 GitHub Release 생성 여부 |
+| `release_latest` | `true` | 생성된 릴리스를 최신으로 표시 |
+| `release_prerelease` | `false` | 프리릴리스로 표시 (M1/RC 등) |
 
 > **컴포지트 액션**(`action.yml`)도 동일/유사 입력을 받습니다.
 

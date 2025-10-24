@@ -1,7 +1,7 @@
 # Release Notes — v1.0.0
 
 **Tag:** `v1.0.0`  
-**Summary:** Official **1.0** release of a centralized, reusable version‑management workflow for **Spring Boot · Next.js · Plain** projects. It performs commit‑driven SemVer bumps, project file synchronization, top‑prepended CHANGELOG updates, and Git tag creation/push in a consistent way. It also emits `repository_dispatch` **only when a bump occurs**, enabling conditional follow‑up pipelines.
+**Summary:** Official **1.0** release of a centralized, reusable version‑management workflow for **Spring Boot · Next.js · Plain** projects **with release creation**. It performs commit‑driven SemVer bumps, project file synchronization, top‑prepended CHANGELOG updates, Git tag creation/push, and **GitHub Release creation with auto notes**. It also emits `repository_dispatch` **only when a bump occurs**, enabling conditional follow‑up pipelines.
 
 ## ✨ Highlights
 - **SemVer bump from commit subject**: `version(major|min|patch): {message}`
@@ -17,6 +17,8 @@
 - **Git tagging**
     - Format: `vX.Y.Z`
     - Release commit message: `chore(release): vX.Y.Z {message} [skip version]`
+- **GitHub Release creation**
+    - On bump, create a release and include auto‑generated release notes
 - **Follow‑up workflows**
     - Send `repository_dispatch` (default: `version-bumped`) **only when bumped**
 
@@ -38,6 +40,11 @@ jobs:
       dispatch_on_bump: true
       dispatch_event_type: version-bumped
       plain_version_file: VERSION
+
+      # Release options
+      create_release: true
+      release_latest: true
+      release_prerelease: false
 ```
 
 ### Composite action (logic only)
@@ -64,6 +71,7 @@ jobs:
 - **Auto detection**: `package.json` → **next**, `build.gradle` → **spring**, otherwise → **plain**
 - **Release commit normalization**: includes original subject description + always appends `[skip version]`
 - **CHANGELOG banner/header ordering**: banner pinned to the very top
+- **Release creation added**: automatically creates a GitHub Release with auto notes on bump
 
 ## ⚠️ Notes / limitations
 - Bump happens **only** on `default_branch` (default: `main`).  

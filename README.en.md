@@ -1,10 +1,10 @@
 # version-management
 
-> **Centralized, reusable GitHub Actions workflow for automated versioning (Spring Boot · Next.js · Plain)**  
-> On pushes to the default branch (`main`) with a compliant commit message, this project performs **Version bump → Project file sync → CHANGELOG update → Git Tag creation/push** in a standardized way.  
+> **Centralized, reusable GitHub Actions workflow for automated versioning **and release creation** (Spring Boot · Next.js · Plain)**  
+> On pushes to the default branch (`main`) with a compliant commit message, this project performs **Version bump → Project file sync → CHANGELOG update → Git Tag creation/push → GitHub Release creation (auto notes)** in a standardized way.  
 > It also emits a `repository_dispatch` event **only when a version bump actually happens**, so you can trigger follow‑up workflows (e.g., `apk-build.yml`) conditionally.
 
-> **한국어 문서** → [README.md](README.md)
+> **Korean docs** → [README.md](README.md)
 
 ---
 
@@ -31,9 +31,10 @@
     - Create & push **Git Tag** (`vX.Y.Z`) + push **release commit**  
       Release commit message: `chore(release): vX.Y.Z {original subject text} [skip version]`
     - **No bump → workflow still succeeds** (handy for pipeline branching)
-- **Follow‑up workflow integration**
-    - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped**
-    - Payload includes: `new_version`, `new_tag`, `bump_level`, `sha`
+- **Release & follow‑up workflow integration**
+    - On bump, **create a GitHub Release** (with auto release notes)
+    - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped**  
+      Payload includes: `new_version`, `new_tag`, `bump_level`, `sha`
 
 ---
 
@@ -52,7 +53,7 @@ version-management/
       └─ auto-version.yml            # Reusable workflow (workflow_call) orchestrator
 ```
 > **Why split it like this?**  
-> The **reusable workflow** handles pipeline orchestration (permissions, concurrency, dispatch), while the **composite action** bundles the actual logic (bump/file updates/changelog/tagging) so it can be reused anywhere.
+> The **reusable workflow** handles orchestration (permissions, concurrency, dispatch, release creation), while the **composite action** bundles the actual logic (bump/file updates/changelog/tagging) for reuse anywhere.
 
 ---
 
@@ -88,6 +89,11 @@ jobs:
       dispatch_on_bump: "true"             # trigger follow-ups only when bumped
       dispatch_event_type: "version-bumped"
       plain_version_file: "VERSION"        # version file path for plain projects
+
+      # Release options
+      create_release: "true"               # create a GitHub Release on bump
+      release_latest: "true"               # mark as latest
+      release_prerelease: "false"          # mark as prerelease (e.g., M1, RC)
 ```
 
 ### 2) (Advanced) Use only the logic in an existing CI
@@ -153,6 +159,9 @@ version(patch): fix null check
 | `dispatch_on_bump` | `true` | Send `repository_dispatch` only when a bump occurred |
 | `dispatch_event_type` | `version-bumped` | Event type for follow‑up workflows |
 | `plain_version_file` | `VERSION` | Version file path for **plain** projects (create if missing; otherwise overwrite with a single `X.Y.Z` line) |
+| `create_release` | `true` | Create a GitHub Release when bumped |
+| `release_latest` | `true` | Mark the created release as **latest** |
+| `release_prerelease` | `false` | Mark the created release as **prerelease** (M1/RC etc.) |
 
 > The **composite action** (`action.yml`) accepts the same/similar inputs.
 
