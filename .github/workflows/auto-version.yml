@@ -87,7 +87,7 @@ on:
         default: "true"
 
       # pre-release 여부
-      release_prelease:
+      release_prerelease:
         default: "생성한 릴리즈를 pre-release로 표시할지 여부 - 기본: false"
         required: false
         type: string
