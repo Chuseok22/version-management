@@ -68,9 +68,11 @@ export function resolveGradleFilePath(workdir) {
   const kts = path.join(workdir, 'build.gradle.kts');
   const groovy = path.join(workdir, 'build.gradle');
   if (fs.existsSync(kts)) {
+    console.info("gradle-kotlin 환경");
     return kts;
   }
   if (fs.existsSync(groovy)) {
+    console.info("gradle-groovy 환경");
     return groovy;
   }
   return '';
