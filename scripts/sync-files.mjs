@@ -2,6 +2,7 @@
 import path from 'node:path';
 import {
   ensureDir,
+  resolveGradleFilePath,
   runCmd,
   updateApplicationYamlVersion,
   updateGradleVersionFile,
@@ -27,7 +28,10 @@ const repoRoot = process.cwd();
 const workdir = inputWorkdir ? path.join(repoRoot, inputWorkdir) : repoRoot;
 
 if (projectType === 'spring') {
-  const gradlePath = path.join(workdir, 'build.gradle');
+  const gradlePath = resolveGradleFilePath(workdir);
+  if (!gradlePath) {
+    console.error("Gradle 파일(build.gradle 또는 build.gradle.kts)을 찾을 수 없습니다.");
+  }
 
   try {
     updateGradleVersionFile(gradlePath, newVersion);

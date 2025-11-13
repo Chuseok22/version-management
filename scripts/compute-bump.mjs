@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { detectProjectType, ensureDir, parseSemverXyz, setOutput, tryExecOut } from "./utils.mjs";
+import { detectProjectType, parseSemverXyz, resolveGradleFilePath, setOutput, tryExecOut } from "./utils.mjs";
 
 /**
  * projectType 자동 판별 (Next.js / Spring Boot / Plain)
@@ -75,7 +75,7 @@ if (lastTag) {
       }
     }
   } else if (projectType === 'spring') {
-    const gradlePath = path.join(workdir, 'build.gradle');
+    const gradlePath = resolveGradleFilePath(workdir);
     if (existsSync(gradlePath)) {
       const txt = readFileSync(gradlePath, 'utf8');
 

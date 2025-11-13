@@ -64,35 +64,54 @@ export function extractVersionDescription(subject) {
 }
 
 // ===== Project detection =====
+export function resolveGradleFilePath(workdir) {
+  const kts = path.join(workdir, 'build.gradle.kts');
+  const groovy = path.join(workdir, 'build.gradle');
+  if (fs.existsSync(kts)) {
+    return kts;
+  }
+  if (fs.existsSync(groovy)) {
+    return groovy;
+  }
+  return '';
+}
+
 export function detectProjectType(workdir, hint = 'auto') {
   if (hint !== 'auto') {
     return hint;
   }
   const pkg = path.join(workdir, 'package.json');
-  const gradle = path.join(workdir, 'build.gradle');
+  const gradlePath = resolveGradleFilePath(workdir);
   if (fs.existsSync(pkg)) {
     return 'next';
   }
-  if (fs.existsSync(gradle)) {
+  if (gradlePath) {
     return 'spring';
   }
-  console.log("package.json 또는 build.gradle 을 찾을 수 없습니다. 일반 프로젝트로 설정합니다.");
+  console.log("package.json 또는 build.gradle(.kts) 을 찾을 수 없습니다. 일반 프로젝트로 설정합니다.");
   return 'plain';
+}
+
+function isKtsFile(filePath) {
+  return filePath.endsWith('.kts');
 }
 
 // ===== Gradle version helpers =====
 
 export function replaceGradleVersionInText(txt, newVersion) {
   let out = txt;
-  // 통일: 모두 assignment 스타일로 교체
+  const kts = isKtsFile(filePath);
+  const quote = kts ? '"' : "'";
+
+  // 라인 선두의 version= 또는 version '...' 스타일 모두 갱신 (Groovy만 method 스타일 허용)
   const reAssign = /(^|\n)\s*version\s*=\s*['"]\d+\.\d+\.\d+(?:-[^'"]+)?['"]/gm;
   const reMethod = /(^|\n)\s*version\s+['"]\d+\.\d+\.\d+(?:-[^'"]+)?['"]/gm;
 
   if (reAssign.test(out)) {
-    out = out.replace(reAssign, (m, p1) => `${p1}version = '${newVersion}'`);
+    out = out.replace(reAssign, (m, p1) => `${p1}version = ${quote}${newVersion}${quote}`);
   }
-  if (reMethod.test(out)) {
-    out = out.replace(reMethod, (m, p1) => `${p1}version = '${newVersion}'`);
+  if (!kts && reMethod.test(out)) { // [CHANGED] .kts에서는 method 스타일 금지
+    out = out.replace(reMethod, (m, p1) => `${p1}version = ${quote}${newVersion}${quote}`);
   }
 
   // 둘 다 없었다면 파일 하단에 추가
@@ -107,7 +126,7 @@ export function updateGradleVersionFile(filePath, newVersion) {
     throw new Error(`build.gradle 파일을 찾을 수 없습니다: ${filePath}`);
   }
   const txt = fs.readFileSync(filePath, 'utf8');
-  const updated = replaceGradleVersionInText(txt, newVersion);
+  const updated = replaceGradleVersionInText(txt, newVersion, filePath);
   fs.writeFileSync(filePath, updated, 'utf8');
 }
 
