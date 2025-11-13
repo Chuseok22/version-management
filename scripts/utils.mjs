@@ -100,7 +100,7 @@ function isKtsFile(filePath) {
 
 // ===== Gradle version helpers =====
 
-export function replaceGradleVersionInText(txt, newVersion) {
+export function replaceGradleVersionInText(txt, newVersion, filePath) {
   let out = txt;
   const kts = isKtsFile(filePath);
   const quote = kts ? '"' : "'";
