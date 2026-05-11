@@ -11,8 +11,8 @@
 ## 🚀 Features
 
 - **Three project types supported**
-    - **Spring Boot (Gradle/Groovy)**  
-      Updates `version` in `build.gradle`, and optionally replaces the `version:` key in `src/main/resources/application.yml`.
+    - **Spring Boot (Gradle Groovy · Kotlin)**  
+      Updates `version` in `build.gradle` or `build.gradle.kts`, and optionally replaces the `version:` key in `src/main/resources/application.yml`.
     - **Next.js (TypeScript)**  
       Updates `package.json.version`, creates/updates `src/constants/version.ts` (path configurable), and reflects the version in `package-lock.json` when present.
     - **Plain (framework‑agnostic projects)**  
@@ -32,7 +32,7 @@
       Release commit message: `chore(release): vX.Y.Z {original subject text} [skip version]`
     - **No bump → workflow still succeeds** (handy for pipeline branching)
 - **Release & follow‑up workflow integration**
-    - On bump, **create a GitHub Release** (with auto release notes)
+    - On bump, **create a GitHub Release** (commit description prepended to auto release notes)
     - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped**  
       Payload includes: `new_version`, `new_tag`, `bump_level`, `sha`
 

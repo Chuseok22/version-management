@@ -11,8 +11,8 @@
 ## 🚀 핵심 기능
 
 - **세 가지 프로젝트 타입 지원**
-    - **Spring Boot (Gradle Groovy)**  
-      `build.gradle`의 `version` 갱신, (옵션) `src/main/resources/application.yml`의 `version:` 키 치환
+    - **Spring Boot (Gradle Groovy · Kotlin)**  
+      `build.gradle` 또는 `build.gradle.kts`의 `version` 갱신, (옵션) `src/main/resources/application.yml`의 `version:` 키 치환
     - **Next.js (TypeScript)**  
       `package.json.version` 갱신 + `src/constants/version.ts`(경로 커스터마이즈 가능) 생성/치환 + `package-lock.json` 반영
     - **Plain (일반 프로젝트)**  
@@ -32,7 +32,7 @@
       릴리즈 커밋 메시지: `chore(release): vX.Y.Z {원본 커밋 설명} [skip version]`
     - **버전 증가가 없으면 성공(Success)으로 종료** (파이프라인 분기에 활용)
 - **릴리스 & 후속 워크플로우 연동**
-    - 버전 증가 시 **GitHub Release 자동 생성**(자동 릴리스 노트)
+    - 버전 증가 시 **GitHub Release 자동 생성** (커밋 설명을 상단에 표시 + 자동 릴리스 노트 병합)
     - 버전 증가시에만 `repository_dispatch`(기본 `version-bumped`) 이벤트 송신  
       Payload: `new_version`, `new_tag`, `bump_level`, `sha`
 
