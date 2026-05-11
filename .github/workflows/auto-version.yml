@@ -148,12 +148,13 @@ jobs:
           workdir:             ${{ inputs.workdir }}
           plain_version_file: ${{ inputs.plain_version_file }}
 
-      # GitHub Release 생성 (자동 생성 릴리즈 노트)
+      # GitHub Release 생성 (커밋 설명 + 자동 생성 릴리즈 노트 병합)
       - name: GitHub Release 생성 (릴리즈 노트 자동생성)
         if: ${{ steps.bump.outputs.version_bumped == 'true' && inputs.create_release == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.bump.outputs.new_tag }}
+          DESCRIPTION: ${{ steps.bump.outputs.release_description }}
         run: |
           set -euo pipefail
           echo "Target tag: $TAG"
@@ -171,7 +172,18 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists. Skip creating."
           else
-            gh release create "$TAG" --generate-notes --title "$TAG" $FLAGS
+            # GitHub API로 자동 생성 노트 요청 (실패 시 빈 문자열로 fallback)
+            AUTO_NOTES=$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$TAG" --jq '.body' 2>/dev/null || true)
+
+            # description이 있으면 상단에 prepend, 없으면 자동 노트만 사용
+            if [ -n "$DESCRIPTION" ]; then
+              FINAL_NOTES=$(printf '%s\n\n---\n\n%s' "$DESCRIPTION" "$AUTO_NOTES")
+            else
+              FINAL_NOTES="$AUTO_NOTES"
+            fi
+
+            gh release create "$TAG" --notes "$FINAL_NOTES" --title "$TAG" $FLAGS
           fi
 
       # 버전 bump 시 repository_dispatch 전송

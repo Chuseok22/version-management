@@ -75,6 +75,10 @@ outputs:
     description: "확정된 프로젝트 타입"
     value: ${{ steps.compute.outputs.project_type }}
 
+  release_description:
+    description: "버전 커밋 설명 (예: 1차 패치)"
+    value: ${{ steps.changelog.outputs.release_description }}
+
 runs:
   using: "composite"
   steps:
