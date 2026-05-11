@@ -31,6 +31,7 @@ if (projectType === 'spring') {
   const gradlePath = resolveGradleFilePath(workdir);
   if (!gradlePath) {
     console.error("Gradle 파일(build.gradle 또는 build.gradle.kts)을 찾을 수 없습니다.");
+    process.exit(1);
   }
 
   try {
