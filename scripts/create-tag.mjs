@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { buildReleaseMessage, execOut, extractVersionDescription, hasChanges, runCmd, tryExecOut } from "./utils.mjs";
+import { buildReleaseMessage, execOut, extractVersionDescription, hasChanges, runCmd, setOutput, tryExecOut } from "./utils.mjs";
 
 const tag = process.env.TAG;
 const newVersion = process.env.NEW_VERSION;
@@ -85,5 +85,14 @@ try {
   runCmd(`git push origin HEAD:${refName}`);
 } catch (e) {
   console.error('변경사항 푸시 실패: ', e?.message ?? e);
+  process.exit(1);
+}
+
+// 태그가 실제로 가리키는 커밋을 출력으로 노출 (repository_dispatch 등 후속 소비자가 정확한 릴리즈 커밋을 알 수 있도록)
+try {
+  const releaseCommitSha = execOut(`git rev-list -n 1 "${tag}"`);
+  setOutput('release_commit_sha', releaseCommitSha);
+} catch (e) {
+  console.error('release_commit_sha 조회 실패: ', e?.message ?? e);
   process.exit(1);
 }
