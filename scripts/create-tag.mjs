@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { buildReleaseMessage, execOut, extractVersionDescription, hasChanges, runCmd, tryExecOut } from "./utils.mjs";
+import { buildReleaseMessage, execOut, extractVersionDescription, hasChanges, runCmd, setOutput, tryExecOut } from "./utils.mjs";
 
 const tag = process.env.TAG;
 const newVersion = process.env.NEW_VERSION;
@@ -87,3 +87,9 @@ try {
   console.error('변경사항 푸시 실패: ', e?.message ?? e);
   process.exit(1);
 }
+
+// 실제로 푸시된 릴리즈 커밋의 SHA
+// github.sha는 워크플로우를 트리거한 최초 커밋에 고정되어, 이 스크립트가 새로 만든
+// 릴리즈 커밋을 반영하지 못한다. repository_dispatch 등 후속 워크플로우가 올바른
+// 커밋을 체크아웃할 수 있도록 실제 HEAD SHA를 별도로 출력한다.
+setOutput('new_sha', execOut('git rev-parse HEAD'));

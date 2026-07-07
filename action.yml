@@ -71,6 +71,10 @@ outputs:
     description: "증가 후 태그 (예: v1.0.3)"
     value: ${{ steps.compute.outputs.new_tag }}
 
+  new_sha:
+    description: "실제로 푸시된 릴리즈 커밋의 SHA (github.sha는 트리거 커밋에 고정되어 부정확함)"
+    value: ${{ steps.create-tag.outputs.new_sha }}
+
   project_type:
     description: "확정된 프로젝트 타입"
     value: ${{ steps.compute.outputs.project_type }}
@@ -129,6 +133,7 @@ runs:
 
     # 태그 생성 후 푸시 + 릴리즈 커밋 푸시
     - name: Create tag & push
+      id: create-tag
       if: ${{ steps.compute.outputs.version_bumped == 'true' }}
       shell: bash
       env:

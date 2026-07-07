@@ -110,6 +110,10 @@ on:
         description: "증가 후 태그 (예: v1.0.3)"
         value: ${{ jobs.version.outputs.new_tag }}
 
+      new_sha:
+        description: "실제로 푸시된 릴리즈 커밋의 SHA (github.sha는 트리거 커밋에 고정되어 부정확함)"
+        value: ${{ jobs.version.outputs.new_sha }}
+
 permissions:
   contents: write
   actions: read
@@ -127,6 +131,7 @@ jobs:
       bump_level: ${{ steps.bump.outputs.bump_level }}
       new_version: ${{ steps.bump.outputs.new_version }}
       new_tag: ${{ steps.bump.outputs.new_tag }}
+      new_sha: ${{ steps.bump.outputs.new_sha }}
       plain_version_file: ${{ inputs.plain_version_file }}
 
     steps:
@@ -202,6 +207,6 @@ jobs:
                 "new_version": "${{ steps.bump.outputs.new_version }}",
                 "new_tag":     "${{ steps.bump.outputs.new_tag }}",
                 "bump_level":  "${{ steps.bump.outputs.bump_level }}",
-                "sha":         "${{ github.sha }}"
+                "sha":         "${{ steps.bump.outputs.new_sha }}"
               }
             }'
