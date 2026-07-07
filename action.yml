@@ -79,6 +79,10 @@ outputs:
     description: "버전 커밋 설명 (예: 1차 패치)"
     value: ${{ steps.changelog.outputs.release_description }}
 
+  release_commit_sha:
+    description: "실제 릴리즈 커밋의 SHA (new_tag가 가리키는 커밋과 동일)"
+    value: ${{ steps.tag.outputs.release_commit_sha }}
+
 runs:
   using: "composite"
   steps:
@@ -129,6 +133,7 @@ runs:
 
     # 태그 생성 후 푸시 + 릴리즈 커밋 푸시
     - name: Create tag & push
+      id: tag
       if: ${{ steps.compute.outputs.version_bumped == 'true' }}
       shell: bash
       env:
