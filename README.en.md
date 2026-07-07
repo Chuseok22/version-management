@@ -2,9 +2,24 @@
 
 > **Centralized, reusable GitHub Actions workflow for automated versioning **and release creation** (Spring Boot · Next.js · Plain)**  
 > On pushes to the default branch (`main`) with a compliant commit message, this project performs **Version bump → Project file sync → CHANGELOG update → Git Tag creation/push → GitHub Release creation (auto notes)** in a standardized way.  
-> It also emits a `repository_dispatch` event **only when a version bump actually happens**, so you can trigger follow‑up workflows (e.g., `apk-build.yml`) conditionally.
+> It also emits a `repository_dispatch` event **only when a version bump actually happens**, so you can trigger follow‑up workflows (e.g., `apk-build.yml`) conditionally — or subscribe directly to this workflow's **outputs** from a job in the same workflow file.
 
 > **Korean docs** → [README.md](README.md)
+
+---
+
+## Table of contents
+
+- [🚀 Features](#-features)
+- [📦 Repository layout](#-repository-layout)
+- [🧭 Quick start (consumer repo)](#-quick-start-consumer-repo)
+- [✍️ Commit convention (required)](#️-commit-convention-required)
+- [⚙️ Inputs (overview)](#️-inputs-overview)
+- [📤 Outputs](#-outputs)
+- [🔔 Wiring up follow-up workflows](#-wiring-up-follow-up-workflows)
+- [🧩 CHANGELOG policy](#-changelog-policy)
+- [🔒 Requirements & permissions](#-requirements--permissions)
+- [❓ FAQ](#-faq)
 
 ---
 
@@ -33,8 +48,9 @@
     - **No bump → workflow still succeeds** (handy for pipeline branching)
 - **Release & follow‑up workflow integration**
     - On bump, **create a GitHub Release** (commit description prepended to auto release notes)
-    - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped**  
-      Payload includes: `new_version`, `new_tag`, `bump_level`, `sha`
+    - Sends `repository_dispatch` (default: `version-bumped`) **only when bumped** — the payload's `sha` always points to the **actual release commit** (the commit the new tag points to).
+    - Also exposes a **job output** (`release_commit_sha`, etc.) so a follow-up job in the same workflow file can chain directly, without dispatch.
+    - See [🔔 Wiring up follow-up workflows](#-wiring-up-follow-up-workflows) for how to choose between the two.
 
 ---
 
@@ -95,6 +111,8 @@ jobs:
       release_latest: "true"               # mark as latest
       release_prerelease: "false"          # mark as prerelease (e.g., M1, RC)
 ```
+
+> If you want to chain straight off this job's `outputs`, see [📤 Outputs](#-outputs) and [🔔 Wiring up follow-up workflows](#-wiring-up-follow-up-workflows).
 
 ### 2) (Advanced) Use only the logic in an existing CI
 
@@ -167,6 +185,107 @@ version(patch): fix null check
 
 ---
 
+## 📤 Outputs
+
+A job that calls the **reusable workflow** (`auto-version.yml`) with `uses:` exposes these `outputs`:
+
+| Output | Description |
+|---|---|
+| `version_bumped` | Whether a version bump happened (`true` / `false`) |
+| `bump_level` | `major` \| `minor` \| `patch` \| `none` |
+| `new_version` | Version after the bump (e.g., `1.0.3`) |
+| `new_tag` | Tag after the bump (e.g., `v1.0.3`) |
+| `release_commit_sha` | **SHA of the actual release commit** — always identical to the commit `new_tag` points to. Empty when no bump occurred in this run. |
+
+A following job in the same workflow file can chain directly off these (`needs.<job_id>.outputs.<name>`):
+
+```yaml
+jobs:
+  chuseok22-version-bump:
+    uses: chuseok22/version-management/.github/workflows/auto-version.yml@v1
+    with:
+      project_type: "auto"
+      # ... (same as the quick-start example above)
+
+  publish:
+    needs: chuseok22-version-bump
+    if: ${{ needs.chuseok22-version-bump.outputs.version_bumped == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      # Check out exactly the release commit that was just created
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.chuseok22-version-bump.outputs.release_commit_sha }}
+
+      - run: echo "Deploying new version ${{ needs.chuseok22-version-bump.outputs.new_version }}"
+```
+
+---
+
+## 🔔 Wiring up follow-up workflows
+
+There are two ways to chain a deploy/build step after a version bump. Choose based on **coupling** and how your workflow files are structured.
+
+### Option A: subscribe to `workflow_call` job outputs directly (recommended)
+
+If your deploy job can live in the **same workflow file** as the one calling `chuseok22-version-bump`, prefer this. Read values directly via `needs.<job_id>.outputs.*`, as shown in the [📤 Outputs](#-outputs) example above.
+
+- ✅ No `repository_dispatch` curl call, no token, no payload parsing.
+- ✅ Same job graph — there is no way for the values to drift apart.
+- ✅ One workflow run in the Actions UI, so the causal chain is easy to see.
+- ⚠️ Your deploy job must live in this workflow file — if it's already a separate file (e.g., an `npm-publish.yml` owned by a different team), you'll need to restructure.
+
+### Option B: subscribe to a `repository_dispatch` event
+
+**Why this exists:** `create-tag.mjs` pushes the release commit and tag using `GITHUB_TOKEN`. To prevent infinite loops, GitHub does **not** let pushes/tags created by `GITHUB_TOKEN` trigger another workflow's `on: push` or `on: push: tags:`. So if an independent workflow file needs to learn "a version was bumped," this repo has to actively send it an event — that's what `repository_dispatch` is for. Multiple independent workflow files can each subscribe to the same event.
+
+**Example receiver workflow in the consumer repo**: `.github/workflows/on-version-bumped.yml`
+
+```yaml
+name: Publish on version bump
+
+on:
+  repository_dispatch:
+    types: [ version-bumped ]   # must match dispatch_event_type
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # Always check out client_payload.sha (see note below)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.sha }}
+
+      - run: |
+          echo "New version: ${{ github.event.client_payload.new_version }}"
+          echo "Tag: ${{ github.event.client_payload.new_tag }}"
+          echo "Level: ${{ github.event.client_payload.bump_level }}"
+          echo "Release commit: ${{ github.event.client_payload.sha }}"
+```
+
+**Payload:**
+
+| Field | Description |
+|---|---|
+| `new_version` | Version after the bump |
+| `new_tag` | Tag after the bump |
+| `bump_level` | `major` \| `minor` \| `patch` |
+| `sha` | SHA of the actual release commit (always identical to the commit `new_tag` points to) |
+
+> ⚠️ **Always check out `ref: client_payload.sha`.** If you check out the default branch (`main`) instead, depending on timing you may see a commit other than the one that was just released. The payload's `sha` always points precisely to the actual release commit.
+
+### Comparing the two options
+
+| | Option A: job outputs | Option B: `repository_dispatch` |
+|---|---|---|
+| Coupling | Tight (same workflow file) | Loose (independent workflow files, multiple subscribers) |
+| Setup complexity | Low (`needs.<job>.outputs.*`) | Medium (receiver workflow + payload parsing) |
+| Value correctness | Always consistent — same job graph | Always points to the actual release commit (`sha` = `release_commit_sha`) |
+| Best for | When the deploy job can live in this workflow file | When you must keep an independent workflow file, or need multiple workflows to react at once |
+
+---
+
 ## 🧩 CHANGELOG policy
 
 - On each release, **prepend** a new version section to the very top.
@@ -193,8 +312,27 @@ This file is automatically generated and maintained by the centralized workflow 
 ## 🔒 Requirements & permissions
 
 - Runner: `ubuntu-latest`, Node: `20`
-- Permissions: `contents: write`
+- Permissions: `contents: write` (pushing files/tags/release commits), `actions: read` (calling the reusable workflow)
 - Checkout: `actions/checkout@v4` with `fetch-depth: 0` (tags/history required)
+
+---
+
+## ❓ FAQ
+
+**Q. I pushed a commit but the version didn't bump.**  
+A. Check that the commit *subject* exactly matches `version(major|minor|patch): message`, and that it was pushed to `default_branch` (default `main`). If the format doesn't match, the workflow still **succeeds**, but no bump happens.
+
+**Q. Doesn't the release commit re-trigger the workflow?**  
+A. The release commit message always includes the `[skip version]` token. If you have another workflow that bypasses the normal commit-message check, verify it respects this token.
+
+**Q. `repository_dispatch` never arrives.**  
+A. Check that `dispatch_on_bump` is `"true"`, and that the consumer workflow's `on.repository_dispatch.types` exactly matches `dispatch_event_type` (default `version-bumped`). No event is sent at all when a run doesn't bump the version.
+
+**Q. `release_commit_sha` / the payload's `sha` is empty or looks wrong.**  
+A. An empty value is expected on a run where `version_bumped` is `false`. If it's empty despite a bump happening, you may have hit the narrow timing window where the floating tag `chuseok22/version-management@v1` was mid-move — in that case, the dispatch's `sha` automatically falls back to `github.sha`.
+
+**Q. Multiple consumer workflows need to know about a version bump at the same time.**  
+A. Use [Option B (`repository_dispatch`)](#-wiring-up-follow-up-workflows) — any number of independent workflow files can each subscribe to the same event type.
 
 ---
 
